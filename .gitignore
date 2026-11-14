@@ -1,0 +1,28 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+
+# Node / Vite (do not start the game project before 8 AM PKT on 14 Nov 2026)
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Moon illumination GeoTIFFs over 50 MB. GitHub rejects files over 100 MB.
+# The 85S 60 m/px product in this repo is about 34 MB and is kept.
+# Use scripts/download_moon_maps to fetch the larger coverage tiles if needed.
+data/moon/AVGVISIB_65S_240M_201608.TIF
+data/moon/AVGVISIB_75S_120M_201608.TIF
+data/moon/*_COG.TIF
