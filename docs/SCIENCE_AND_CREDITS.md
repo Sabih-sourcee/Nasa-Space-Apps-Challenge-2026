@@ -52,6 +52,11 @@
   - `ml.glb`: "Mobile Launcher". The tower beside the pad on the home screen, the Earth academy and the launch. Used as published.
   - `sev.glb`: "Space Exploration Vehicle" pressurized rover concept. The training rover parked on the Moon in Power Before Shadow. Repacked as a compressed glTF; otherwise as published.
   - `hdu.glb`: "Habitat Demonstration Unit". The dome module of the surface habitat on the Moon and Mars. The NASA logo and flag decals were scrubbed from the texture to keep the project's no-flags rule; hatches and labels remain.
+  - `insight.glb`: "InSight Cruise Lander (arm deployed)". Stands beside the pad at the Mars landing site. Simplified and Draco-compressed; no other changes.
+- **Two landing-site terrain scans** by SebastianSosnowski on Sketchfab, licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/):
+  - "Moon - Petavius crater", https://sketchfab.com/3d-models/moon-petavius-crater-ce9c009b517b421eab8c8429b536382f. The Moon landing descends onto its crater floor.
+  - "Mars - Olympus Mons", https://sketchfab.com/3d-models/mars-olympus-mons-53679864b41a43b0ae0459ce99d6adf0. The Mars landing descends into its summit caldera.
+  - Changes: each mesh was rasterized top-down into a 16-bit height map (`public/terrain/*_height.png`, high byte in red, low byte in green) and its texture resampled into a matching overhead photo (`*_color.jpg`). The game scales the relief, flattens a circle around each landing zone so the pads stay level, and tiles the maps with mirroring past the edge of the scan.
 - **Five CC0 photogrammetry boulders** in `public/models/`, from Poly Haven, https://polyhaven.com/ (CC0), downloaded 15 November 2026 and decimated to a few thousand triangles each so hundreds of instances stay fast. `rock_moon_1.glb` to `rock_moon_3.glb` are from the "Moon Rock" scan set; `rock_mars_1.glb` and `rock_mars_2.glb` are red desert boulders from the "Namaqualand Boulder" scan set. They replace the painted dodecahedron rocks on the Moon and Mars once loaded.
 - The clouds, the painted fallback ground shown if a texture file is missing, and everything else are still drawn in code.
 - **No other third-party models, images or audio files.**
