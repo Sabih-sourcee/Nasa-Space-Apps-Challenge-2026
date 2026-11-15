@@ -19,6 +19,7 @@ import { CommanderBriefing } from './ui/Commander';
 import { CrewShip } from './ui/CrewShip';
 import { GravityLab } from './ui/GravityLab';
 import { Debrief } from './ui/Debrief';
+import { DocHeader } from './ui/DocHeader';
 import { Hud, PauseMenu, TouchControls } from './ui/Hud';
 import { Atlas, Briefing, Credits, Home, SettingsDialog } from './ui/Screens';
 
@@ -101,6 +102,7 @@ export function App() {
 
   return (
     <div className={`app screen-${screen}`}>
+      <DocHeader />
       {screen === 'home' && (
         <>
           <div className="backdrop"><GameCanvas fov={52} envIntensity={0.55} background="#cfe2f3"><HomeScene /></GameCanvas></div>
