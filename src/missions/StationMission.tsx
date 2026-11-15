@@ -4,17 +4,18 @@ import * as THREE from 'three';
 import { playCue } from '../game/audio';
 import { hud } from '../game/hud';
 import { input } from '../game/input';
+import { DOCK_VIEWS, useViews, view } from '../game/view';
 import { probe } from '../game/probe';
 import { useGame } from '../game/store';
-import { DOCK_TUNING, makeDock, retryDock, stepDock, type DockState } from '../sim/flight';
+import { CABIN_PRESSURE, DOCK_STANDOFF, DOCK_TUNING, dockActive, dockStage, makeDock, retryDock, stepDock, type DockStage, type DockState } from '../sim/flight';
 import { makeDrifter, nearestRail, stepDrift, type DriftEnv, type DriftState } from '../sim/movement';
 import { hintsOn } from '../sim/save';
 import { rateStation } from '../sim/score';
 import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight, useReducedMotion, useSim } from '../three/GameCanvas';
-import { M, Pouch, Sign, StationExterior, Strut } from '../three/Props';
-import { EarthGlobe, Stars } from '../three/Scenery';
+import { M, Orbiter, Pouch, Sign, Station, Strut } from '../three/Props';
+import { EarthGlobe, Stars, SunDisc } from '../three/Scenery';
 import { panelTexture } from '../three/textures';
 import { ResetCard } from '../ui/Hud';
 
@@ -22,10 +23,30 @@ import { ResetCard } from '../ui/Hud';
 // Phase 1: docking
 // ---------------------------------------------------------------------------
 
+/** The objective line for each step of the docking. */
+const STAGE_TEXT: Record<DockStage, string> = {
+  approach: 'Approach: fly toward the docking port',
+  alignment: 'Alignment: put the cross under your crosshair',
+  final: 'Final approach: stay centred and arrive slowly',
+  capture: 'Soft capture: the latches have caught',
+  hardDock: 'Hard dock: the ring is pulling the ports together',
+  checks: 'Connection checks before the hatch opens',
+  docked: 'Docked. Hatch open',
+  aborted: 'Approach called off',
+};
+
 export function DockingScene({ sim, tier, onEnd }: { sim: React.MutableRefObject<DockState>; tier: Tier; onEnd: (s: DockState) => void }) {
   const m = M();
   const station = useRef<THREE.Group>(null);
   const { camera } = useThree();
+  useViews(DOCK_VIEWS);
+  const own = useRef<THREE.Group>(null);
+  const nose = useRef<THREE.Group>(null);
+  const ring = useRef<THREE.Group>(null);
+  const reduced = useReducedMotion();
+  const camAt = useRef(new THREE.Vector3());
+  const joinAt = useRef(new THREE.Vector3());
+  const wasJoined = useRef(false);
   const tune = DOCK_TUNING[tier];
   const settings = useGame((s) => s.save.settings);
   const hints = hintsOn(settings, tier);
@@ -36,37 +57,110 @@ export function DockingScene({ sim, tier, onEnd }: { sim: React.MutableRefObject
 
   useSim((dt) => {
     const prev = sim.current;
-    if (prev.status !== 'approach') {
+    if (!dockActive(prev)) {
       if (!ended.current) { ended.current = true; onEnd(prev); }
       return;
     }
     ended.current = false;
-    sim.current = stepDock(prev, { steerX: input.axisX(), steerY: input.axisY(), thrust: input.held('primary'), brake: input.held('brake') }, dt, tier);
-  }, () => {
+    // Thrusters only matter on the way in. After contact the one live key is the action key.
+    const flying = prev.status === 'approach';
+    const next = stepDock(prev, {
+      steerX: flying ? input.axisX() : 0, steerY: flying ? input.axisY() : 0,
+      thrust: flying && input.held('primary'), brake: flying && input.held('brake'), action: input.consume('use'),
+    }, dt, tier);
+    // Short radio calls, once, as each step begins.
+    if (next.status !== prev.status) {
+      if (next.status === 'capture') { playCue('ok'); hud.say('Contact. Soft capture: the latches have caught.'); }
+      else if (next.status === 'hardDock') hud.say('Ring pulling in. Hooks closing for a hard dock.');
+      else if (next.status === 'checks') { playCue('checkpoint'); hud.say('Hard dock. Check the tunnel for leaks before the hatch opens.'); }
+    } else if (next.leakCheck !== prev.leakCheck) {
+      if (next.leakCheck === 'running') hud.say('Filling the tunnel with air.');
+      else if (next.leakCheck === 'passed') { playCue('ok'); hud.say('Pressure is equal and holding. No leak.'); }
+    }
+    sim.current = next;
+  }, (delta) => {
     const s = sim.current;
-    camera.position.set(0, 0, 0);
-    camera.lookAt(0, 0, -10);
-    // The docking camera is on the shuttle, so the station appears to move the opposite way.
-    station.current?.position.set(-s.x, -s.y, -s.range - 2.6);
+    const joined = s.status === 'capture' || s.status === 'hardDock' || s.status === 'checks' || s.status === 'docked';
+    const outside = joined || view.is('Outside');
+    if (joined) {
+      // Once the latches catch, the camera moves beside the two rings to show them join.
+      const want = joinAt.current.set(8.5, 3.2, -0.6);
+      if (!wasJoined.current) { camAt.current.copy(camera.position); wasJoined.current = true; }
+      if (reduced) camAt.current.copy(want); else camAt.current.lerp(want, 1 - Math.exp(-2.2 * delta));
+      camera.position.copy(camAt.current);
+      camera.lookAt(0, 0, -2.9);
+    } else if (outside) {
+      wasJoined.current = false;
+      // Beside the orbiter, so both vehicles and the gap between them are in view.
+      const zm = view.zoom();
+      camera.position.set(30 * zm, 11 * zm, 24 * zm);
+      camera.lookAt(0, 0, -Math.min(s.range, 34) * 0.4);
+    } else {
+      wasJoined.current = false;
+      camera.position.set(0, 0, 0);
+      camera.lookAt(0, 0, -10);
+    }
+    if (own.current) own.current.visible = outside;
+    if (nose.current) nose.current.visible = !outside;
+    // Port-to-port: the station sits ahead by the range, plus the gap the capture ring still holds open.
+    station.current?.position.set(-s.x, -s.y, -s.range - 2.6 - s.standoff);
+    if (ring.current) {
+      // The capture ring stays against the port and pulls in with it.
+      ring.current.visible = outside;
+      ring.current.position.set(0, 0, -2.2 - s.standoff);
+      const shut = s.status === 'approach' || s.status === 'aborted' ? 0 : s.status === 'capture' ? Math.min(1, s.stageT / 0.8) : 1;
+      ring.current.children.forEach((latch, i) => { if (i > 0) latch.rotation.x = -0.9 + shut * 0.9; });
+    }
 
     if (tick.current++ % 6 !== 0) return;
     const off = Math.hypot(s.x, s.y);
     const aligned = off <= tune.alignTol;
     const gentle = s.closing <= tune.maxClosing;
-    const color = s.status === 'aborted' ? '#ff3b30' : aligned ? '#35e07a' : '#ffb020';
+    const stage = dockStage(s);
+    const color = s.status === 'aborted' ? '#ff3b30' : s.status === 'capture' ? '#5fe3ff' : joined || aligned ? '#35e07a' : '#ffb020';
     if (color !== lastColor.current) { lastColor.current = color; setPortColor(color); }
+    if (joined) {
+      // After contact: what the mechanism is doing, and the one key that matters.
+      const checks = s.status === 'checks';
+      hud.warn(null);
+      hud.set({
+        objective: STAGE_TEXT[stage],
+        crosshair: false,
+        touchLabels: { primary: 'Close in', use: !checks ? 'Skip ahead' : s.leakCheck === 'passed' ? 'Open hatch' : 'Leak check', brake: 'Brake' },
+        meters: checks
+          ? [{ id: 'pressure', label: 'Tunnel pressure', value: s.pressure, max: CABIN_PRESSURE, text: `${Math.round(s.pressure)} kPa`, status: s.leakCheck === 'passed' ? 'ok' : 'caution', note: `Cabin is ${Math.round(CABIN_PRESSURE)} kPa on both sides` }]
+          : s.status === 'hardDock'
+            ? [{ id: 'align', label: 'Ring pulling in', value: DOCK_STANDOFF - s.standoff, max: DOCK_STANDOFF, text: `${Math.round(s.standoff * 100)} cm gap`, status: 'ok' }]
+            : [{ id: 'align', label: 'Ports lining up', value: Math.max(0, s.contactOff - off), max: Math.max(0.01, s.contactOff), text: `${off.toFixed(2)} m off`, status: 'ok' }],
+        readouts: [
+          { label: 'Step', value: stage === 'capture' ? 'Soft capture' : stage === 'hardDock' ? 'Hard dock' : 'Connection checks' },
+          { label: 'Rings met at', value: `${s.contactSpeed.toFixed(2)} m/s, ${s.contactOff.toFixed(2)} m off centre` },
+          { label: 'Seal', value: !checks ? 'Hooks closing' : s.leakCheck === 'waiting' ? 'Not checked yet' : s.leakCheck === 'running' ? 'Filling the tunnel' : 'Holding. No leak' },
+          { label: 'Attempt', value: String(s.attempts) },
+        ],
+        hint: !checks ? 'Hands off: the docking ring does this part. Press E to skip ahead.'
+          : s.leakCheck === 'waiting' ? 'Press E to fill the tunnel with air and run the leak check.'
+            : s.leakCheck === 'running' ? 'Watch the tunnel pressure climb to match the cabin.'
+              : 'The pressure is holding. Press E to open the hatch.',
+      });
+      return;
+    }
     const side = Math.abs(s.x) < 0.1 ? 'centred' : s.x > 0 ? `${s.x.toFixed(1)} m right of the port` : `${(-s.x).toFixed(1)} m left of the port`;
     const vert = Math.abs(s.y) < 0.1 ? 'centred' : s.y > 0 ? `${s.y.toFixed(1)} m high` : `${(-s.y).toFixed(1)} m low`;
     hud.set({
-      crosshair: s.status === 'approach',
+      objective: STAGE_TEXT[stage],
+      crosshair: s.status === 'approach' && !view.is('Outside'),
+      touchLabels: { primary: 'Close in', use: 'Use', brake: 'Brake' },
       meters: [
         { id: 'align', label: 'Alignment', value: Math.max(0, 3 - off), max: 3, text: `${off.toFixed(1)} m off`, status: aligned ? 'ok' : off < tune.alignTol * 2.5 ? 'caution' : 'low', note: `Dock within ${tune.alignTol.toFixed(1)} m of centre` },
         { id: 'closing', label: 'Closing speed', value: Math.max(0, s.closing), max: 1.6, text: `${s.closing.toFixed(2)} m/s`, status: gentle ? 'ok' : s.range < 15 ? 'low' : 'caution', note: `Safe to dock under ${tune.maxClosing.toFixed(2)} m/s` },
       ],
       readouts: [
-        { label: 'Range', value: `${s.range.toFixed(1)} m` },
+        { label: 'Step', value: stage === 'alignment' ? 'Alignment' : stage === 'final' ? 'Final approach' : 'Approach' },
+        { label: 'Range', value: `${s.range.toFixed(1)} m, ring to port` },
         { label: 'Side to side', value: side },
         { label: 'Up and down', value: vert },
+        { label: 'Roll', value: 'Held for you (assist)' },
         { label: 'Attempt', value: String(s.attempts) },
       ],
       hint: !hints || s.status !== 'approach' ? null
@@ -86,11 +180,25 @@ export function DockingScene({ sim, tier, onEnd }: { sim: React.MutableRefObject
       <Stars />
       <ambientLight intensity={0.16} />
       <SunLight direction={[0.6, 0.5, 0.6]} intensity={3.6} size={40} />
-      <EarthGlobe position={[80, -1135, -520]} radius={1100} spin={0.006} />
-      <group ref={station}><StationExterior portColor={portColor} /></group>
+      <SunDisc direction={[0.6, 0.5, 0.6]} />
+      <EarthGlobe position={[80, -1135, -520]} radius={1100} spin={0.006} below />
+      <group ref={station}><Station portColor={portColor} /></group>
       {/* Shuttle nose and docking probe seen at the bottom of the docking camera */}
-      <mesh position={[0, -1.9, -2.9]} rotation={[-Math.PI / 2 - 0.1, 0, 0]} material={m.white}><coneGeometry args={[1.05, 2.6, 28]} /></mesh>
-      <mesh position={[0, -1.32, -2.7]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><torusGeometry args={[0.36, 0.045, 8, 28]} /></mesh>
+      <group ref={nose}>
+        <mesh position={[0, -1.9, -2.9]} rotation={[-Math.PI / 2 - 0.1, 0, 0]} material={m.white}><coneGeometry args={[1.05, 2.6, 28]} /></mesh>
+        <mesh position={[0, -1.32, -2.7]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><torusGeometry args={[0.36, 0.045, 8, 28]} /></mesh>
+      </group>
+      {/* The orbiter itself, shown in the outside view. Its docking ring sits where the station's port arrives. */}
+      <group ref={own} visible={false} position={[0, 0, 11.4]} rotation={[-Math.PI / 2, 0, 0]}><Orbiter /></group>
+      {/* Soft-capture ring: it reaches out ahead of the nose, catches the port with three latches, then pulls in. */}
+      <group ref={ring} visible={false}>
+        <mesh material={m.steel}><torusGeometry args={[1.34, 0.07, 10, 40]} /></mesh>
+        {[0, 1, 2].map((i) => (
+          <group key={i} position={[Math.cos((i * 2 * Math.PI) / 3 + Math.PI / 2) * 1.34, Math.sin((i * 2 * Math.PI) / 3 + Math.PI / 2) * 1.34, 0]} rotation={[-0.9, 0, 0]}>
+            <mesh position={[0, 0, -0.16]}><boxGeometry args={[0.2, 0.1, 0.34]} /><meshStandardMaterial color={portColor} emissive={portColor} emissiveIntensity={0.6} roughness={0.5} /></mesh>
+          </group>
+        ))}
+      </group>
     </>
   );
 }
@@ -375,9 +483,10 @@ export function StationMission() {
     hud.warn(null);
     if (s.status === 'aborted') { playCue('fail'); setAbort(s.abortReason || 'speed'); return; }
     playCue('complete');
-    hud.say('Soft capture. Docking complete. Opening the hatch.');
-    hud.set({ objective: 'Docked', hint: null, crosshair: false });
-    window.setTimeout(() => setPhase('cargo', { stats: { dockAttempts: s.attempts } }), 2200);
+    hud.say('Hatch open. Welcome aboard the station.');
+    hud.set({ objective: 'Docked. Hatch open', hint: null, crosshair: false });
+    // The quality of the contact is kept for the debrief, in whole centimetres.
+    window.setTimeout(() => setPhase('cargo', { stats: { dockAttempts: s.attempts, dockContact: Math.round(s.contactSpeed * 100), dockOff: Math.round(s.contactOff * 100) } }), 2200);
   };
 
   const onCargoDone = (d: DriftState) => {
@@ -389,7 +498,7 @@ export function StationMission() {
       consequence: `${attempts > 1
         ? `Your first approach was called off and the shuttle backed away to 25 metres. Slowing down earlier made attempt ${attempts} a soft dock.`
         : 'You lined up first and arrived slowly, so the docking ring made a soft capture on the first approach.'
-      } Inside, each push sent you drifting at the same speed until you grabbed a rail${d.recoveries > 0 ? `. After a missed rail you used the tether ${d.recoveries} ${d.recoveries === 1 ? 'time' : 'times'} to get back` : ''}. Nothing slows you down in free fall, so you plan the stop before you push.`,
+      }${run.stats.dockContact !== undefined ? ` The rings met at ${(run.stats.dockContact / 100).toFixed(2)} m/s, ${((run.stats.dockOff ?? 0) / 100).toFixed(2)} m off centre. The ring lined the ports up and pulled in for a hard dock, and the hatch stayed shut until the tunnel held cabin pressure.` : ''} Inside, each push sent you drifting at the same speed until you grabbed a rail${d.recoveries > 0 ? `. After a missed rail you used the tether ${d.recoveries} ${d.recoveries === 1 ? 'time' : 'times'} to get back` : ''}. Nothing slows you down in free fall, so you plan the stop before you push.`,
       objectives: [
         { label: 'Dock with safe alignment and closing speed', done: true },
         { label: 'Move through the module with push, drift and grab', done: true },
@@ -397,6 +506,7 @@ export function StationMission() {
       ],
       stats: [
         { label: 'Docking attempts', value: String(attempts) },
+        ...(run.stats.dockContact !== undefined ? [{ label: 'Contact speed', value: `${(run.stats.dockContact / 100).toFixed(2)} m/s` }] : []),
         { label: 'Push-offs', value: String(d.pushes) },
         { label: 'Rail grabs', value: String(d.grabs) },
         { label: 'Wall bumps', value: String(d.wallHits) },

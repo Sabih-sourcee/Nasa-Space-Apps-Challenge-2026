@@ -30,10 +30,16 @@ function distToSegment(x: number, z: number, f: FlatZone): number {
 
 export type HeightFn = (x: number, z: number) => number;
 
+/** 0 inside a flat work area, rising smoothly to 1 outside its blend band. */
+export function flatMask(flats: FlatZone[], x: number, z: number): number {
+  let mask = 1;
+  for (const f of flats) mask = Math.min(mask, smooth(f.r, f.r + f.blend, distToSegment(x, z, f)));
+  return mask;
+}
+
 export function makeHeight(o: HeightOptions): HeightFn {
   return (x, z) => {
-    let mask = 1;
-    for (const f of o.flats) mask = Math.min(mask, smooth(f.r, f.r + f.blend, distToSegment(x, z, f)));
+    const mask = flatMask(o.flats, x, z);
     let h = (fbm(x * o.scale, z * o.scale, o.seed) - 0.5) * 2 * o.amp * mask;
     h += (fbm(x * o.scale * 6, z * o.scale * 6, o.seed + 31) - 0.5) * 0.22 * (0.25 + 0.75 * mask);
     for (const c of o.craters) {

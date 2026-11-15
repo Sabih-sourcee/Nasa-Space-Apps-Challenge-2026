@@ -330,7 +330,7 @@ export function ShipMission() {
     if (finished.current) return;
     finished.current = true;
     playCue('complete');
-    hud.say('Soft capture. We are docked. Good work, Cadet.');
+    hud.say('Hatch open. We are docked. Good work, Cadet.');
     hud.set({ objective: 'Docked', hint: null, crosshair: false });
     const f = run.flags;
     const reserve = run.stats.reserve ?? 100;
@@ -342,7 +342,7 @@ export function ShipMission() {
       } ${f.latched
         ? 'You latched the spare battery before docking. It will be on the rack when we reach the lunar outpost.'
         : 'The spare battery was not latched before docking. On the Moon it will still be strapped in the cargo crate, and digging it out will cost time.'
-      }${s.attempts > 1 ? ` Docking took ${s.attempts} approaches.` : ''}`,
+      }${s.attempts > 1 ? ` Docking took ${s.attempts} approaches.` : ''} The rings met at ${s.contactSpeed.toFixed(2)} m/s, and the hatch stayed shut until the leak check passed.`,
       objectives: [
         { label: 'Restore one power branch with the spare connector', done: true },
         { label: 'Keep the crew ventilation stable', done: true },

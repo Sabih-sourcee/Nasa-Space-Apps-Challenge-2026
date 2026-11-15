@@ -14,7 +14,11 @@ export interface Meter {
   note?: string;
 }
 
-export interface Readout { label: string; value: string; status?: 'ok' | 'caution' | 'low'; note?: string }
+export interface Readout {
+  label: string; value: string; status?: 'ok' | 'caution' | 'low'; note?: string;
+  /** Always shown, even when it needs no attention: a checklist line that has been ticked. */
+  keep?: boolean;
+}
 
 export interface Warning { title: string; text: string; level: 'info' | 'caution' | 'alert'; sourceId?: string }
 

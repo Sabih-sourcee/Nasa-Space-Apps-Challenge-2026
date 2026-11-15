@@ -16,9 +16,18 @@ npm run dev
 
 Open http://localhost:5173, then **Crew Ship · play together** on the title screen.
 
-- **Solo training** needs nothing else and also works in a production build.
-- **Host a crew / Join with a code** needs the mission service. It runs inside the dev server, so it is only there under `npm run dev`. Other players open the same address on the same network and type the join code.
-- Crew state is held in memory. Restarting the dev server ends every crew.
+- **Solo training** and the **3D ship tour** need nothing else and work in any copy of the game.
+- **Host a crew / Join with a code** works three ways:
+
+| How the game was started | Who can join |
+| --- | --- |
+| `npm run dev` | Anyone on the same network who opens this computer's address |
+| `npm start` (builds the game, then serves it to the network on port 4173) | The same. This is the one to use for a demo across computers |
+| A plain static copy with no server behind it (the `dist` folder on a web host) | Other windows on the **same computer** only. The host's window holds the crew, so it must stay open |
+
+- The game tries the server first. If there is none it switches to the same-computer mode by itself, and the lobby says so under the join code.
+- Crew state is held in memory. Restarting the server, or closing the host window in the same-computer mode, ends the crew.
+- Playing across computers from a static web host is **Not built**: that needs a server that stays running, which a static host does not have.
 
 ## What is in the build
 

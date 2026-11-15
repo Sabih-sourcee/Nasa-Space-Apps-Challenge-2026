@@ -1,9 +1,9 @@
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useReducedMotion } from './GameCanvas';
 import type { HeightFn, RockSpec } from './terrain';
-import { earthTexture, fbm, grainTexture, groundTexture, rng, type GroundKind } from './textures';
+import { earthMaps, realEarth, fbm, grainTexture, groundRelief, groundTexture, rng, type GroundKind } from './textures';
 
 /** Gradient sky sphere. Colours are passed in so a dust storm can tint it live. */
 export function SkyDome({ top, horizon, radius = 1100, tint }: { top: string; horizon: string; radius?: number; tint?: React.MutableRefObject<{ top: THREE.Color; horizon: THREE.Color } | null> }) {
@@ -28,7 +28,7 @@ export function SkyDome({ top, horizon, radius = 1100, tint }: { top: string; ho
   return <mesh ref={mesh} material={mat} renderOrder={-10}><sphereGeometry args={[radius, 32, 16]} /></mesh>;
 }
 
-export function Stars({ count = 1600, radius = 1000, opacity }: { count?: number; radius?: number; opacity?: React.MutableRefObject<number> }) {
+export function Stars({ count = 2600, radius = 1000, opacity }: { count?: number; radius?: number; opacity?: React.MutableRefObject<number> }) {
   const geom = useMemo(() => {
     const r = rng(404);
     const pos = new Float32Array(count * 3);
@@ -58,28 +58,113 @@ export function Stars({ count = 1600, radius = 1000, opacity }: { count?: number
 }
 
 /** Painted Earth with a thin blue atmosphere rim. Lit by the scene's Sun, so its phase is right. */
-export function EarthGlobe({ position, radius, spin = 0.01 }: { position: [number, number, number]; radius: number; spin?: number }) {
-  const tex = useMemo(() => earthTexture(), []);
+function sunGlow(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d') as CanvasRenderingContext2D;
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.08, 'rgba(255,250,235,1)');
+  g.addColorStop(0.16, 'rgba(255,236,190,0.55)');
+  g.addColorStop(0.45, 'rgba(255,220,160,0.12)');
+  g.addColorStop(1, 'rgba(255,220,160,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/**
+ * The Sun as seen from space: a small hard disc with a soft glow. It sits a long
+ * way off in the same direction the scene's sunlight comes from, and keeps its
+ * place in the sky as the camera moves.
+ */
+export function SunDisc({ direction, size = 150 }: { direction: [number, number, number]; size?: number }) {
+  const ref = useRef<THREE.Sprite>(null);
+  const tex = useMemo(() => sunGlow(), []);
+  const dir = useMemo(() => new THREE.Vector3(...direction).normalize().multiplyScalar(900), [direction[0], direction[1], direction[2]]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFrame(({ camera }) => { ref.current?.position.copy(camera.position).add(dir); });
+  return (
+    <sprite ref={ref} scale={[size, size, 1]}>
+      <spriteMaterial map={tex} transparent depthWrite={false} depthTest={true} blending={THREE.AdditiveBlending} fog={false} />
+    </sprite>
+  );
+}
+
+/** `below` is for a planet seen from orbit, under the camera: it turns the globe so warm latitudes face up, not the pole. */
+export function EarthGlobe({ position, radius, spin = 0.01, below = false }: { position: [number, number, number]; radius: number; spin?: number; below?: boolean }) {
+  const maps = useMemo(() => earthMaps(), []);
+  // The NASA map takes over from the painted one as soon as it has loaded. Clouds stay painted.
+  const [real, setReal] = useState<{ map: THREE.Texture; rough: THREE.Texture } | null>(null);
+  useEffect(() => {
+    let on = true;
+    realEarth().then((r) => { if (on) setReal(r); }).catch(() => { /* keep the painted Earth */ });
+    return () => { on = false; };
+  }, []);
   const globe = useRef<THREE.Mesh>(null);
+  const clouds = useRef<THREE.Mesh>(null);
   const reduced = useReducedMotion();
-  useFrame((_, d) => { if (globe.current && !reduced) globe.current.rotation.y += d * spin; });
+  // The thin blue line of air: brightest where you look through the most of it, at the edge.
+  const air = useMemo(() => new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { tint: { value: new THREE.Color('#58a6ff') } },
+    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 tint; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - max(dot(normalize(vN), normalize(vV)), 0.0), 2.6); gl_FragColor = vec4(tint, f * 0.85); }',
+  }), []);
+  // Clouds: the soft cloud map sets where they are, and the same map repeated small breaks up their edges.
+  const cloudMat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({ color: '#ffffff', alphaMap: maps.clouds, transparent: true, depthWrite: false, roughness: 1, metalness: 0, emissive: '#8fa6c4', emissiveIntensity: 0.1, fog: false });
+    m.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <alphamap_fragment>', `#ifdef USE_ALPHAMAP
+        float cBase = texture2D(alphaMap, vAlphaMapUv).g;
+        float cFine = texture2D(alphaMap, vAlphaMapUv * vec2(23.0, 11.0)).g - 0.5;
+        float cFiner = texture2D(alphaMap, vAlphaMapUv * vec2(97.0, 47.0) + 0.3).g - 0.5;
+        diffuseColor.a *= smoothstep(0.36, 0.6, cBase + cFine * 0.26 + cFiner * 0.12) * 0.96;
+      #endif`);
+    };
+    return m;
+  }, [maps]);
+  useFrame((_, d) => {
+    if (reduced) return;
+    if (globe.current) globe.current.rotation.y += d * spin;
+    // Clouds drift a little faster than the ground turns.
+    if (clouds.current) clouds.current.rotation.y += d * spin * 1.35;
+  });
   return (
     <group position={position}>
+      <group rotation={below ? [0.75, 0, 0.25] : [0, 0, 0]}>
       <mesh ref={globe} rotation={[0.35, 2.2, 0.1]}>
-        <sphereGeometry args={[radius, 64, 40]} />
-        <meshStandardMaterial map={tex} roughness={0.85} metalness={0} emissive="#16335c" emissiveIntensity={0.12} fog={false} />
+        <sphereGeometry args={[radius, 96, 64]} />
+        <meshStandardMaterial map={real?.map ?? maps.map} roughnessMap={real?.rough ?? maps.rough} roughness={1} metalness={0} emissive="#16335c" emissiveIntensity={0.1} fog={false} />
       </mesh>
-      <mesh scale={1.025}>
+      <mesh ref={clouds} rotation={[0.35, 2.2, 0.1]} scale={1.006} material={cloudMat}>
+        <sphereGeometry args={[radius, 96, 64]} />
+      </mesh>
+      </group>
+      <mesh scale={1.012} material={air}>
+        <sphereGeometry args={[radius, 64, 40]} />
+      </mesh>
+      <mesh scale={1.03}>
         <sphereGeometry args={[radius, 48, 32]} />
-        <meshBasicMaterial color="#6fb6ff" transparent opacity={0.16} side={THREE.BackSide} depthWrite={false} fog={false} />
+        <meshBasicMaterial color="#6fb6ff" transparent opacity={0.14} side={THREE.BackSide} depthWrite={false} fog={false} />
       </mesh>
     </group>
   );
 }
 
-export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40, color = '#ffffff' }: {
-  height: HeightFn; kind: GroundKind; size?: number; segments?: number; repeat?: number; color?: string;
+/**
+ * A real site photo laid over the whole ground (it does not repeat); the tiled ground
+ * texture then only adds fine detail. Tile coordinates as in `landingSite.ts`.
+ */
+export interface GroundPhoto { map: THREE.Texture; tile: number; u: number; v: number; detailMean: number }
+
+export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40, color = '#ffffff', photo }: {
+  height: HeightFn; kind: GroundKind; size?: number; segments?: number; repeat?: number; color?: string; photo?: GroundPhoto;
 }) {
+  // The Moon and Mars ground use real NASA surface imagery; it replaces the painted
+  // texture once it has loaded, and the painted one stays if the file cannot be read.
+  const real = useRealGround(kind);
   const geom = useMemo(() => {
     const g = new THREE.PlaneGeometry(size, size, segments, segments);
     g.rotateX(-Math.PI / 2);
@@ -98,15 +183,71 @@ export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40,
     return g;
   }, [height, size, segments]);
   const mat = useMemo(() => {
-    const map = groundTexture(kind).clone();
+    const own = kind === 'moon' || kind === 'mars';
+    const map = (real?.map ?? groundTexture(kind)).clone();
     map.needsUpdate = true;
     map.repeat.set(repeat, repeat);
-    const bump = grainTexture().clone();
+    // Moon and Mars have their own relief, lined up with the colour: crater rims, ripples and stones catch the sun.
+    const bump = (real?.rough ?? (own ? groundRelief(kind) : grainTexture())).clone();
     bump.needsUpdate = true;
-    bump.repeat.set(repeat * 2, repeat * 2);
-    return new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: 1.2, roughness: 0.97, metalness: 0, color, vertexColors: true });
-  }, [kind, repeat, color]);
+    bump.repeat.set(own ? repeat : repeat * 2, own ? repeat : repeat * 2);
+    const m = new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: own ? 2.4 : 1.2, roughness: 0.97, metalness: 0, color: photo ? '#ffffff' : color, vertexColors: !photo });
+    if (own) {
+      // Seen from above, a repeated texture shows as a grid. Each sample is mixed with a second one
+      // that is larger and turned, so the two never line up and the repeat is hidden.
+      const second = 'mat2(0.829, -0.559, 0.559, 0.829) * UV * 0.29 + vec2(0.37, 0.11)';
+      // With a site photo, the detail texture only modulates brightness around its own mean.
+      const tint = photo ? `
+            vec2 pUv = vMapUv / ${repeat.toFixed(1)};
+            vec2 tileUv = vec2(${photo.u.toFixed(5)} + (pUv.x - 0.5) * ${(size / photo.tile).toFixed(5)}, ${photo.v.toFixed(5)} + (0.5 - pUv.y) * ${(size / photo.tile).toFixed(5)});
+            float dl = dot(detail.rgb, vec3(0.299, 0.587, 0.114)) / ${photo.detailMean.toFixed(4)};
+            diffuseColor.rgb *= texture2D(sitePhoto, vec2(tileUv.x, 1.0 - tileUv.y)).rgb * mix(1.0, dl, 0.5);`
+        : 'diffuseColor *= detail;';
+      m.onBeforeCompile = (shader) => {
+        if (photo) shader.uniforms.sitePhoto = { value: photo.map };
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <map_pars_fragment>', `#include <map_pars_fragment>
+            ${photo ? 'uniform sampler2D sitePhoto;' : ''}`)
+          .replace('#include <map_fragment>', `#ifdef USE_MAP
+            vec4 detail = mix(texture2D(map, vMapUv), texture2D(map, ${second.replace('UV', 'vMapUv')}), 0.45);
+            ${tint}
+          #endif`)
+          .replace('#include <bumpmap_pars_fragment>', THREE.ShaderChunk.bumpmap_pars_fragment
+            .replace(/texture2D\(\s*bumpMap\s*,/g, 'bumpMix(')
+            .replace('uniform float bumpScale;', `uniform float bumpScale;
+              vec4 bumpMix(vec2 uv) { return mix(texture2D(bumpMap, uv), texture2D(bumpMap, ${second.replace('UV', 'uv')}), 0.45); }`));
+      };
+    }
+    // Shader programs are cached by this key; the photo changes the generated code.
+    if (photo) m.customProgramCacheKey = () => `site-${photo.u}-${photo.v}-${photo.tile}-${size}-${repeat}`;
+    return m;
+  }, [kind, repeat, color, real, photo, size]);
   return <mesh geometry={geom} material={mat} receiveShadow />;
+}
+
+// Real NASA surface imagery for the Moon and Mars ground, loaded once and shared.
+type GroundMaps = { map: THREE.Texture; rough: THREE.Texture };
+const groundPromise: Partial<Record<GroundKind, Promise<GroundMaps>>> = {};
+function loadGround(kind: 'moon' | 'mars'): Promise<GroundMaps> {
+  groundPromise[kind] ??= Promise.all([
+    new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}textures/${kind}_ground.jpg`),
+    new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}textures/${kind}_relief.jpg`),
+  ]).then(([map, rough]) => {
+    map.colorSpace = THREE.SRGBColorSpace;
+    for (const t of [map, rough]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; }
+    return { map, rough };
+  });
+  return groundPromise[kind] as Promise<GroundMaps>;
+}
+function useRealGround(kind: GroundKind): GroundMaps | null {
+  const [maps, setMaps] = useState<GroundMaps | null>(null);
+  useEffect(() => {
+    if (kind !== 'moon' && kind !== 'mars') return;
+    let on = true;
+    loadGround(kind).then((g) => { if (on) setMaps(g); }).catch(() => { /* keep the painted ground */ });
+    return () => { on = false; };
+  }, [kind]);
+  return maps;
 }
 
 export function Rocks({ rocks, color }: { rocks: RockSpec[]; color: string }) {

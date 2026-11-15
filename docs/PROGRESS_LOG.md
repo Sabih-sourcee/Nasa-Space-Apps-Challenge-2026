@@ -199,3 +199,154 @@ Not checked in this stage:
 - The other crew members are implied by text and lights. Only the player's astronaut is modelled.
 - 14 campaign missions are listed as Planned and are not playable.
 - The robotic arm is a flat two-joint model, and station gauge readings are illustrative. The NASA life support page confirms that the system controls cabin pressure, and gives no numbers.
+
+## Stage 12: mouse walking and planet surfaces (15 November 2026)
+
+- **Mouse and touch walking.** In every walking scene (Earth, Moon, Mars, the F03 ship, L03 and Crew Ship) a click or tap on the ground walks the astronaut there, and holding and dragging keeps steering. A click on a station walks to it and uses it. Any movement key cancels the target. Keys and on-screen buttons work as before. Checked in the browser on the Crew Ship and on Mars with scripted pointer events. A real mouse, a real touch screen, and the click-to-use path: Unverified.
+- **Title screen.** The view leans with the mouse and the astronaut turns toward it.
+- **Earth.** Painted again with forest, desert, mountains, ice and a lighter sea shelf. The sea is shinier than the land, a cloud layer drifts on its own, and the rim of air glows at the edge. Seen from orbit, the globe is turned so the pole is not under the camera. The continents are invented.
+- **Moon and Mars ground.** Small craters with bright rims, dune ripples and stones, with matching relief so they catch the sun. Each sample is mixed with a larger turned copy, which hides the repeat that showed as a grid from the lander.
+- All of it is still drawn in code. No photographs or NASA image files were added. Frame rate with the larger textures: Unverified.
+
+## Stage 13: real NASA maps and the Gravity Test Chamber (15 November 2026)
+
+- **Real maps.** Four NASA globe maps were added to `public/textures/` (Earth, Moon, Mars, Jupiter; about 2 MB together; sources in `SCIENCE_AND_CREDITS.md`). The Earth globe in every scene now uses the real map, with the painted Earth showing until it loads. Clouds and the ground underfoot are still painted. Two files from the first download (a false-colour Earth and a Moon photograph) were not usable as maps and were removed.
+- **Gravity Test Chamber** (Gravity Lab on the title screen). A glass tube with a cadet inside and five places to copy: Moon, Mars, Earth, Jupiter and the space station. Pick one by clicking its globe or its button, then jump (Space) or drop a ball from 2 m (E). The panel shows gravity, what a scale would read for a 32 kg cadet, jump height, fall time and air pressure, and a card says what happens to the body there and what you would need to survive. Tests are listed side by side to compare. Rules are in `src/sim/gravityLab.ts` with 13 unit tests.
+- Checked in the browser: the chamber opened, Moon and station were picked, a Moon jump measured about 2.1 m in 3.2 s and the ball 1.57 s. Clicking a globe with a real mouse, the other three worlds on screen, and narrow or touch screens: Unverified.
+- Science limits: no real chamber can switch gravity. Jupiter has no ground, so the tube only copies its pull. The body notes for the Moon, Mars and Jupiter are reasoning from the lower or higher pull, not measured crew data; the station figures are NASA's.
+- `npm test`: 228 passed.
+
+## Stage 14: camera views, journeys and stage separation (15 November 2026)
+
+Asked for: a continuous, more realistic expedition, with different views on the V key. Seven reference images were supplied; `REFERENCE_MAP.md` records what each one maps to and what is still not built.
+
+- **Camera views (V, or the view button in the HUD).** Views never change the rules, only the camera.
+  - Walking (Earth, Moon, Mars, both ships, Crew Ship): Follow, Close, Above, Helmet. In the helmet view A and D turn, W and S walk, and a visor rim frames the picture.
+  - Landing (Moon, Mars): Chase, Side, Above, Window.
+  - Docking: Docking camera, Outside (shows the orbiter, the station and the gap).
+  - Launch: Cockpit, Outside.
+- **Launch stack and separation.** The stack is now built from parts: a core stage, two boosters and the orbiter. `src/sim/launchStack.ts` decides from the flight's own altitude when the boosters (45 km) and the core stage (180 km) leave, how far the vehicle has leaned over, and which engines are lit. The outside view shows it, Mission Control calls each separation, and the HUD lists what is still flying. Heights are rounded and the climb is compressed.
+- **Journey sequences.** Short in-engine films before the briefing, the first time a mission is flown: Walk to the pad (into F01), Orbit to the station (S01), To the Moon (L02), To Mars (M04). 17 to 19 seconds each, three captioned shots. Skip (Esc or the button), Next shot, captions follow the captions setting, and reduced motion shows one still per shot. A journey changes no game state, so skipping, finishing and reloading all lead to the same mission start. Any journey can be watched again from the Mission Log.
+- **Checked in the browser:** Walk to the pad played through two shots and Esc skipped it to the briefing; To Mars ran to its end and handed over to the briefing; To the Moon and Orbit to the station were seen on two shots each. The outside launch view showed liftoff, the lean-over, the boosters leaving and the radio call. Helmet and Above views on Mars, two landing views on the Moon, and the outside docking view were seen.
+- **Unverified:** the journeys at real speed (the test pane runs slowly), reduced motion, journey replay from the Mission Log, the core-stage separation on screen, the Close view, the view button in Crew Ship, walking in the helmet view with a real keyboard for more than a few steps, touch screens, and frame rate.
+- **Not built from the brief:** docking in phases with soft capture, hard dock and seal checks; touchdown dust, slope checks and a ladder to EVA; new rock formations; a boarding shot inside the cockpit; outcomes carried into journey lines; a measured performance target.
+- `npm test`: 241 passed.
+
+## Stage 15: docking in steps (15 November 2026)
+
+Docking (S01, and the docking at the end of F03) used to end the moment the craft reached the port inside the limits. It now runs as a continuous sequence, in `src/sim/flight.ts`:
+
+| Step | What happens | Who does it |
+| --- | --- | --- |
+| Approach (40 to 15 m) | Fly toward the port | Player |
+| Alignment (15 to 5 m) | Put the cross under the crosshair | Player |
+| Final approach (under 5 m) | Stay centred, arrive slowly | Player |
+| Soft capture (2.5 s) | Only if the rings meet inside the alignment and closing-speed limits. Latches catch, the ring pulls the ports into line | Mechanism |
+| Hard dock (3 s) | The ring pulls in the last 30 cm and the hooks close | Mechanism |
+| Connection checks | Press E to fill the tunnel and run the leak check. The hatch stays shut until the tunnel holds cabin pressure, 101 kPa. Press E to open it | Player |
+| Docked | Hatch open, on to the next task | |
+
+- Range, offsets and speeds are measured from the orbiter's docking ring to the station's port, not between the vehicles' centres.
+- A fast or crooked arrival is never captured: it is called off as before, with a retry from 25 metres. Braking (X) still backs the craft away.
+- After contact the camera moves beside the two rings so the join can be seen, in either view. With reduced motion it cuts there. A capture ring with three latches was added to the orbiter.
+- E during soft capture or hard dock skips ahead. A unit test checks that skipping, early or late, leaves exactly the state that watching does.
+- The contact speed and offset are kept and reported in the S01 and F03 debriefs.
+- Simplified, and said so in the HUD and here: roll is held for the pilot, the leak check is one button and a few seconds, and real hard docks take many minutes.
+- Checked in the browser (S01, Judge Mode): contact at 0.20 m/s and 0.40 m off centre was captured, the side-on view showed the rings joined, E during pressurising did not open the hatch, the check passed at 101 kPa, E opened the hatch, and the mission moved on to the cargo task with the contact figures saved.
+- Unverified in the browser: flying the whole approach by hand, an aborted approach and its retry under the new rules, the skip key, reduced motion, touch buttons, and the F03 docking.
+- `npm test`: 247 passed.
+
+## Stage 16: a film before or after every mission, zoom, station detail, quieter HUD (15 November 2026)
+
+Asked for: realistic, detailed animation before or after every level, to suit what is happening; plus a level-by-level plan (Earth training and launch, spacecraft control, docking), a less cartoonish interface and a camera that is not zoomed in too far.
+
+**Films.** Twelve now, built from the missions' own models. Each is skippable (Esc), captioned, steps shot by shot, shows stills with reduced motion, changes no game state, and can be watched again from the Mission Log. A closing film plays over the results screen the first time a mission is completed; finishing it or skipping it carries on exactly where Continue was going.
+
+| Mission | Before | After |
+| --- | --- | --- |
+| E02 Earth training | The launch site: the pad, the yard, the cadet | (Walk to the pad plays before F01) |
+| F01 Launch | Walk to the pad | Earth departure: the core stage lets go, thrusters steady the orbiter |
+| F03 Keep the Ship Flying | Power fault: a warning light (short) | Docking capture is part of the mission |
+| S01 Docking | Orbit to the station | Aboard the station: the two vehicles as one |
+| S04 Module alert | Pressure alarm: air escaping from a module (short) | |
+| L02 Moon | To the Moon | On the Moon: dust falling straight back, the habitat, Earth in the sky |
+| L03 The Last Battery | Night is coming: the Sun goes down on the outpost (short) | |
+| M04 Mars | To Mars | On Mars: dust hanging in thin air, the outpost, Earth as a dot |
+
+**Camera zoom.** Mouse wheel over the 3D view, or the minus and plus keys, moves every outside camera between 0.55 and 1.9 times its normal distance. The HUD is drawn by the page, so it does not change size.
+
+**Station.** Radiators, a communications dish, antennas, a row of laboratory windows, handrail rings and a spare docking adapter were added to the station model.
+
+**HUD.** Inside missions the HUD now uses dark neutral panels, thin lines, square corners and fewer colours. Menus keep the bolder game style.
+
+**Checked in the browser:** the launch site, Earth departure (two shots), pressure alarm, On the Moon (two shots), On Mars, and the lunar sunset films rendered; zoom moved the Mars walking camera back and stopped at its limits; the new HUD was seen on Mars.
+
+**Unverified:** the films at real speed, Power fault and Aboard the station on screen, the closing film actually starting from the results screen's Continue button, reduced motion, the Mission Log buttons for the new films, the leak puff, and frame rate.
+
+**Not built from this brief:**
+- Level 1 as written: collecting food, tools and a battery to a loading rack, latching the rack, and a boarding step. E02 is still the suit check and the equipment carry across the gravity lanes.
+- Level 2 as written: a free-flight spacecraft control mission with rotation, a navigation target and a rendezvous checkpoint. The game goes from the launch straight to docking.
+- Thruster puffs during play, a detailed spacecraft hull, a station interior arrival film, and instruments rebuilt around target-relative speed.
+- A full playthrough test and a performance measurement.
+
+`npm test`: 265 passed.
+
+## Stage 17: Level 1, Earth training with supplies, cargo and boarding (15 November 2026)
+
+E02 was a suit check and one carry through the gravity lanes. It is now five steps with four checkpoints, so a reload does not send the player back to the start.
+
+| Step | What the player does | What they see | Checkpoint |
+| --- | --- | --- | --- |
+| Supply run | Takes the food crate, the tool case and the spare battery from the supply shelf, one at a time, and loads each into the rack | The item in the astronaut's hands, then in its own slot in the rack. Reyes says why the crew takes it | Mission start |
+| Suit check | Unchanged: inspect each item, find and fix the fault | Gauges, chest light, clearance | Supplies loaded |
+| Gravity drill | Unchanged: carry the pouch through the Earth, Mars and Moon lanes, jumping the bars | The body now dips on landing as the knees take the weight. After the first Earth jump Reyes gives the airtime as the baseline to remember for the Moon | Suit cleared |
+| Secure cargo | At the rack, now on its cart by the pad road: close the door, then fasten two restraints | The door swings shut, each strap appears with a green latch, and the cargo checklist ticks | Drill complete |
+| Board | Walks to the open door of the crew transport | Mission complete. The walk to the pad film and the launch follow | |
+
+- Rules are in `src/sim/cargo.ts`: one item in the hands at a time, nothing loads into a closed rack, the rack cannot be closed until it is full, and securing goes door, restraint, restraint.
+- The HUD checklist keeps ticked lines visible (a new `keep` flag on HUD readouts).
+- Old saves with a checkpoint at the suit check or the gravity lanes still load: those start with the rack already full.
+- Honest limits: boarding ends the mission and goes to the results screen, then the walk to the pad film and the launch briefing, not straight into the cockpit. The rack moves to the pad road between the drill and the cargo step, explained by a radio line, not shown. The star rating still depends only on the suit check.
+- Checked in the browser (Judge Mode): all three items picked up and loaded with the right prompts, the phase moved to the suit check with the checkpoint saved; from the last checkpoint the door and both restraints locked with the checklist fully ticked, boarding completed the mission with all six objectives and three stars.
+- Unverified: walking the whole mission by hand (the astronaut was placed next to each station), the landing dip on screen, the baseline radio line, touch, and the suit and drill steps after these changes beyond the unit tests.
+- `npm test`: 272 passed.
+
+## Stage 18: films every time, the launch film, Level 2 in flight, more detail (15 November 2026)
+
+Reported: no animation was showing in any level. Cause: a film only played the first time a mission was started or completed, and the campaign save already had E02, F01 and S01 completed, so none of them played. Resuming from a checkpoint with Continue never plays one either. Fix: the film before a mission now plays every time the mission is started from its mission card, and the film after it plays every time it is completed. Both can be skipped with Esc. Continue and Retry still go straight to play.
+
+- **Order of the first three levels.** E02 training, then Walk to the pad, then the new **Liftoff** film (countdown with vapour venting, ignition and smoke at the pad, liftoff seen from a ground camera, the climb from a camera flying alongside with the sky darkening, and the two boosters letting go at 45 km), then F01.
+- **F01 now begins in flight**, 45 km up, just after the boosters have gone (`makeAscentAloft`). The pad checklist became a climb checklist (boosters away, core engines, guidance, manual control) and the countdown became the autopilot handing over. All six gates are still ahead. A reset returns to booster separation.
+- **After F01** the Earth departure film ends with the station coming into view ahead.
+- **Cockpit camera** sits further back and higher, so the windows and the whole panel are in view. Zoom moves it along the cabin.
+- **Detail.** Orbiter: panel seams, a payload bay line, side windows, thruster pods with nozzles, three engine bells, an antenna. Core stage: tank ribs and an outside fuel line. Station: module seams, hatch rings, a robotic arm, navigation lights. Space: a Sun disc with a glow where the light comes from, and more stars.
+- **Interface.** The checklist panel, the readout banner and the radio bubble inside missions now match the restrained HUD.
+- Checked in the browser: all four shots of the Liftoff film, F01 starting at 45 km with the climb checklist, the new cockpit view, and the detailed orbiter in the outside docking view.
+- Unverified: the films starting from the mission card and from the results screen in the campaign (they were opened directly), a full flight of F01 by hand from the new start, the Sun disc on screen, and frame rate.
+- Not built: thruster puffs while flying, a rebuilt cockpit model, a redesigned station, free rotation of the spacecraft. The boosters are solid rocket motors, which is what "fuel motors" was taken to mean.
+- `npm test`: 277 passed.
+
+## Stage 19: clear films, crews without the dev server, new title screen (15 November 2026)
+
+- **Films.** The caption box, the buttons and the note were covering the bottom of the picture. They are gone: the picture is clear, with three small buttons in the top corner (CC, next shot, Skip) and thin progress marks in the lower bar. Captions are off until CC or the C key turns them on. With speech switched on in Settings the narration is read aloud.
+- **"The mission service is not running."** That appeared whenever the game was opened without `npm run dev`, because only the dev server had the crew service. Fixed three ways: the service now also runs in the built game (`npm start`, new, serves it to the network); with no server at all the host's own window holds the crew and other windows on the same computer can join; and the message is gone, replaced by a note in the lobby when a crew is same-computer only. The crew rules moved to `src/sim/crewHub.ts` so the server and the browser run the same code, with 6 unit tests.
+- **Title screen.** Restyled after the supplied reference: a dark glass Continue button with a pale gold outline, four dark tiles (Missions, Gravity Lab, Settings, Science), one wide blue Crew Ship button, a dark difficulty bar with an outlined choice, round top buttons, and vapour rolling off the launch pad.
+- Checked in the browser: the title screen, the Liftoff film with a clear picture, a crew hosted through the dev server, and with the server blocked two windows hosting and joining one crew, a wrong code refused with a clear message. The built game's server answered a host request on port 4173.
+- Unverified: two separate computers through `npm start`, a real static web host, the CC and speech options on screen.
+- Honest limit: the reference image is a photo-realistic render. The title screen's layout and panels now follow it; the rocket, pad and astronaut are still the game's own simple models.
+- `npm test`: 283 passed.
+
+## Stage 20: real 3D models and terrain from the dossier branch (15 November 2026)
+
+Asked for: the 3D model functions, the model replacements and the landing terrain from `cursor/dossier-ui-release-a7a9`, without any of its theme changes.
+
+- **Taken** (six commits, cherry-picked in order): Moon and Mars ground from real NASA surface imagery; the Apollo Lunar Module and Perseverance models with the Draco decoder; six more NASA models (shuttle stack, Mobile Launcher, ISS, Space Exploration Vehicle, Habitat Demonstration Unit) and five Poly Haven boulders; those models wired into the pad, launch, docking and surface scenes; the Petavius crater and Olympus Mons landing terrain; the InSight lander at the Mars landing site.
+- **Not taken** (three commits): the mission-dossier restyle, the beginner readability pass and the colour change. No file from them was brought over: `styles.css`, `DocHeader.tsx`, `art.tsx`, `main.tsx`, the two extra font packages and the interface parts of `App.tsx` are as they were on this branch.
+- **Credits.** The branch's four credit commits were written on top of its theme text and would not apply, so the same credits for the models, ground imagery and terrain scans were written into `SCIENCE_AND_CREDITS.md`, the README and the in-game credits by hand, leaving out its font and artwork lines.
+- **Conflicts resolved** in three files where this branch had also changed: the pad (the launch film still leaves the rocket off the pad), and the imports of the launch and docking scenes.
+- **Made consistent.** The docking mission and the films now share one station component, so both show the real ISS with the docking port the simulation aims at. The launch film uses the real Mobile Launcher.
+- Each model replaces the code-drawn one only after it has loaded, and the code-drawn one stays if a file cannot be read.
+- Checked in the browser: the real shuttle stack and Mobile Launcher on the title screen, the Apollo Lunar Module, habitat and real ground on the Moon, the Perseverance rover and real ground on Mars, and every model file answering with status 200 and no load warnings.
+- Unverified: the ISS in the docking view (the pause menu was open when it was captured), the Space Exploration Vehicle, InSight and the two landing terrains on screen, and frame rate with the models loaded (Perseverance alone is 4.9 MB).
+- Known mismatch: the pad now shows the real Space Shuttle, with the orbiter on the side of an orange tank. The Liftoff film and the outside launch view still fly the code-drawn stack, with the orbiter on top, because its boosters and core stage are separate parts that can let go. The two do not look the same.
+- `npm test`: 283 passed.

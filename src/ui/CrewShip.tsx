@@ -17,6 +17,8 @@ import { GameCanvas } from '../three/GameCanvas';
 import { ReyesPortrait, WorldArt } from './art';
 import { Bar, Btn, Chip, Comm, Dialog, IconBtn, Keycap, SourceLink, Stars, withKeys } from './common';
 import { Icon } from './icons';
+import { ViewButton, Visor } from './Hud';
+import { crewTransport } from '../game/crewStore';
 
 const ROLE_ICON: Record<Role, string> = { pilot: 'rocket', engineer: 'bolt', life: 'air', logistics: 'box', science: 'flask', comms: 'antenna' };
 const RES_ICON: Record<keyof Res, string> = { meals: 'box', fuel: 'fuel', power: 'battery', water: 'fuel', air: 'air', crops: 'leaf', readiness: 'shield' };
@@ -75,13 +77,14 @@ function Entry() {
         </section>
       </div>
       {crew.error && <p className="error center" role="alert"><Icon name="warning" size={18} /> {crew.error}</p>}
-      <p className="fine center">Cadet names are made up by the game. No real names, no chat box: crews talk with preset calls. A shared crew needs the game started with <code>npm run dev</code>, which also runs the mission service.</p>
+      <p className="fine center">Cadet names are made up by the game. No real names, no chat box: crews talk with preset calls. To play across computers, start the game with <code>npm start</code> on one of them and open its address on the others. Without that, a crew can still be shared between windows on this computer.</p>
     </div>
   );
 }
 
 function Lobby({ s }: { s: CrewSession }) {
   const crew = useCrew();
+  const local = !s.solo && crewTransport() === 'local';
   const me = meOf(s, crew.memberId);
   const host = s.hostId === crew.memberId;
   const spec = INCIDENT_BY_ID[s.incident];
@@ -93,7 +96,7 @@ function Lobby({ s }: { s: CrewSession }) {
       <header className="top-bar">
         <IconBtn icon="back" label="Leave this crew" onClick={crew.leave} />
         <div className="top-title"><div className="kicker">{s.solo ? 'Solo training' : 'Crew lobby'}</div><h1>The Kestrel</h1></div>
-        {!s.solo && <div className="join-code" aria-label={`Join code ${s.code}`}><small>Join code</small><strong>{s.code}</strong></div>}
+        {!s.solo && <div className="join-code" aria-label={`Join code ${s.code}`}><small>Join code</small><strong>{s.code}</strong>{local && <em>This computer only: open the game in another window to join, and keep this window open.</em>}</div>}
       </header>
       <div className="lobby-grid">
         <section className="panel">
@@ -379,6 +382,7 @@ function Ship({ s }: { s: CrewSession }) {
       </GameCanvas>
 
       <div className="hud">
+        <Visor />
         <div className="hud-top">
           <div className="hud-left">
             <section className="hud-objective">
@@ -409,6 +413,7 @@ function Ship({ s }: { s: CrewSession }) {
 
           <section className="hud-right">
             <div className="hud-buttons">
+              <ViewButton />
               <IconBtn icon="book" label="Words to know" onClick={() => setWords(true)} />
               <IconBtn icon="headset" label="Crew calls" pressed={calls} onClick={() => setCalls(!calls)} />
               {host && <IconBtn icon="flag" label="End the mission now (host)" onClick={() => { void crew.act({ type: 'end' }); }} />}
@@ -443,6 +448,7 @@ function Ship({ s }: { s: CrewSession }) {
         </div>
 
         <div className="hud-bottom">
+          {!prompt && !open && <span className="mouse-tip"><Icon name="hand" size={15} /> Click the floor to walk, or use W A S D. Click a station or equipment to use it. V changes the view.</span>}
           {prompt && !open && <div className="hud-prompt">{m ? <><Keycap>{m[1]}</Keycap><span>{m[2]}</span></> : <span>{withKeys(prompt)}</span>}</div>}
           {lastLines.length > 0 && <Comm name="Ship log" live="polite">{lastLines.map((l) => <span key={l.n} className={`log-line log-${l.kind}`}>{l.text}</span>)}</Comm>}
         </div>

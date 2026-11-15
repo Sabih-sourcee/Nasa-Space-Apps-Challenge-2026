@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useReducedMotion } from './GameCanvas';
+import { RealAsset } from './models';
 import { foilTexture, grainTexture, insigniaTexture, labelTexture, panelTexture, solarCellTexture } from './textures';
 
 // Shared materials. Created once and reused by every prop.
@@ -65,7 +66,7 @@ export function Sign({ lines, position, rotation = [0, 0, 0], size = [2.4, 0.9],
 }
 
 /** Engine exhaust that grows with thrust. */
-export function Exhaust({ power, length = 3, radius = 0.5, color = '#ffd9a0' }: { power: React.MutableRefObject<number>; length?: number; radius?: number; color?: string }) {
+export function Exhaust({ power, length = 3, radius = 0.5, color = '#ffd9a0', glow = false }: { power: React.MutableRefObject<number>; length?: number; radius?: number; color?: string; glow?: boolean }) {
   const ref = useRef<THREE.Mesh>(null);
   const reduced = useReducedMotion();
   useFrame(({ clock }) => {
@@ -77,8 +78,15 @@ export function Exhaust({ power, length = 3, radius = 0.5, color = '#ffd9a0' }: 
   });
   return (
     <mesh ref={ref} position={[0, -length / 2, 0]} rotation={[Math.PI, 0, 0]} visible={false}>
-      <coneGeometry args={[radius, length, 14, 1, true]} />
-      <meshBasicMaterial color={color} transparent opacity={0.8} side={THREE.DoubleSide} depthWrite={false} fog={false} />
+      <coneGeometry args={[radius, length, 18, 1, true]} />
+      {/* A big engine's flame glows: it adds its light to what is behind it and has a white-hot centre. */}
+      <meshBasicMaterial color={color} transparent opacity={glow ? 0.34 : 0.8} side={THREE.DoubleSide} depthWrite={false} fog={false} blending={glow ? THREE.AdditiveBlending : THREE.NormalBlending} />
+      {glow && (
+        <mesh scale={[0.45, 0.8, 0.45]} position={[0, length * 0.1, 0]}>
+          <coneGeometry args={[radius, length, 14, 1, true]} />
+          <meshBasicMaterial color="#fff4dc" transparent opacity={0.4} side={THREE.DoubleSide} depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      )}
     </mesh>
   );
 }
@@ -203,8 +211,10 @@ export function Habitat({ tint = 'moon', beacon = false }: { tint?: 'moon' | 'ma
         <meshStandardMaterial ref={lamp} color="#fff4d6" emissive={beacon ? '#ffb020' : '#fff4d6'} emissiveIntensity={1} />
       </mesh>
       <Sign lines={['HABITAT AIRLOCK']} position={[0, 2.9, 0.13]} size={[1.5, 0.36]} />
-      {/* Dome module and mast */}
-      <mesh position={[-8.6, 0, -6]} material={body} castShadow><sphereGeometry args={[3.2, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>
+      {/* Dome module and mast. The dome is the real NASA Habitat Demonstration Unit model once it loads. */}
+      <group position={[-8.6, 0, -6]}>
+        <RealAsset kind="hdu" fallback={<mesh material={body} castShadow><sphereGeometry args={[3.2, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>} />
+      </group>
       <Strut a={[7.2, 0, -7]} b={[7.2, 8.5, -7]} r={0.07} />
       <mesh position={[7.2, 8.2, -6.6]} rotation={[1.0, 0, 0]} material={m.white}><sphereGeometry args={[0.8, 16, 8, 0, Math.PI * 2, 0, 0.9]} /></mesh>
     </group>
@@ -297,35 +307,91 @@ export function Pouch() {
 }
 
 /** Fictional shuttle-class launch craft: winged orbiter on a core stage with two boosters. */
-export function ShuttleStack() {
+/** The crew orbiter that rides on top of the stack and flies on alone. Its base is at the origin, nose up. */
+export function Orbiter({ power }: { power?: React.MutableRefObject<number> }) {
   const m = M();
   return (
     <group>
-      {/* Core stage */}
-      <mesh position={[0, 19, 0]} material={m.hull} castShadow><cylinderGeometry args={[2.6, 2.6, 34, 28]} /></mesh>
-      <mesh position={[0, 30, 0]} material={m.navy}><cylinderGeometry args={[2.63, 2.63, 1.2, 28]} /></mesh>
-      <mesh position={[0, 8, 0]} material={m.red}><cylinderGeometry args={[2.63, 2.63, 0.6, 28]} /></mesh>
-      <mesh position={[0, 1.2, 0]} material={m.darkSteel}><cylinderGeometry args={[1.5, 2.2, 2.2, 20, 1, true]} /></mesh>
-      {/* Boosters */}
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * 3.9, 0, 0]}>
-          <mesh position={[0, 14, 0]} material={m.white} castShadow><cylinderGeometry args={[1.25, 1.25, 26, 20]} /></mesh>
-          <mesh position={[0, 28.6, 0]} material={m.white} castShadow><coneGeometry args={[1.25, 3.2, 20]} /></mesh>
-          <mesh position={[0, 0.9, 0]} material={m.darkSteel}><cylinderGeometry args={[0.9, 1.4, 1.8, 16, 1, true]} /></mesh>
-          <mesh position={[0, 20, 0]} material={m.navy}><cylinderGeometry args={[1.27, 1.27, 0.8, 20]} /></mesh>
+      <mesh position={[0, 3.5, 0]} material={m.hull} castShadow><cylinderGeometry args={[2.3, 2.6, 7, 28]} /></mesh>
+      <mesh position={[0, 9.2, 0]} material={m.white} castShadow><sphereGeometry args={[2.3, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>
+      <mesh position={[0, 9.2, 0]} scale={[1, 2.1, 1]} material={m.white} castShadow><sphereGeometry args={[2.3, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>
+      <mesh position={[0, 10.6, 1.72]} rotation={[-0.62, 0, 0]} material={m.glass}><planeGeometry args={[2.2, 0.9]} /></mesh>
+      <mesh position={[0, 3.5, 2.2]} material={m.black}><boxGeometry args={[4.4, 6.6, 0.25]} /></mesh>
+      {[-1, 1].map((sd) => (
+        <mesh key={sd} position={[sd * 3.6, 2, 1.9]} rotation={[0, 0, sd * -0.35]} material={m.white} castShadow><boxGeometry args={[4.2, 4.6, 0.3]} /></mesh>
+      ))}
+      <mesh position={[0, 2.3, -2.9]} material={m.white} castShadow><boxGeometry args={[0.3, 4.2, 2.4]} /></mesh>
+      <mesh position={[0, 5.5, -2.45]} rotation={[0, Math.PI, 0]} material={m.patch}><circleGeometry args={[1.1, 28]} /></mesh>
+      {/* Hull detail: panel seams, a payload bay line, side windows, thruster pods and an antenna */}
+      {[0.9, 2.6, 4.3, 6.2].map((y) => <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} material={m.darkSteel}><torusGeometry args={[2.47 - (y - 0.9) * 0.045, 0.025, 6, 40]} /></mesh>)}
+      <mesh position={[0, 3.6, -2.47]} material={m.darkSteel}><boxGeometry args={[0.05, 5.6, 0.05]} /></mesh>
+      {[-1, 1].map((sd) => (
+        <group key={sd}>
+          <mesh position={[sd * 1.25, 10.3, 1.35]} rotation={[-0.62, sd * 0.75, 0]} material={m.glass}><planeGeometry args={[0.9, 0.6]} /></mesh>
+          {/* Thruster pods near the nose and the tail, each with two small nozzles */}
+          {[8.6, 0.9].map((y) => (
+            <group key={y} position={[sd * (y > 5 ? 2.2 : 2.55), y, 0]}>
+              <mesh material={m.white}><boxGeometry args={[0.45, 0.7, 0.7]} /></mesh>
+              {[-0.18, 0.18].map((z) => <mesh key={z} position={[sd * 0.28, 0, z]} rotation={[0, 0, sd * -Math.PI / 2]} material={m.darkSteel}><cylinderGeometry args={[0.07, 0.12, 0.16, 10, 1, true]} /></mesh>)}
+            </group>
+          ))}
+          {/* Outer engine bells either side of the main one */}
+          <mesh position={[sd * 1.25, -0.4, 0]} material={m.darkSteel}><cylinderGeometry args={[0.4, 0.68, 0.9, 16, 1, true]} /></mesh>
         </group>
       ))}
-      {/* Orbiter on top */}
-      <mesh position={[0, 39.5, 0]} material={m.hull} castShadow><cylinderGeometry args={[2.3, 2.6, 7, 28]} /></mesh>
-      <mesh position={[0, 45.2, 0]} material={m.white} castShadow><sphereGeometry args={[2.3, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>
-      <mesh position={[0, 45.2, 0]} scale={[1, 2.1, 1]} material={m.white} castShadow><sphereGeometry args={[2.3, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>
-      <mesh position={[0, 46.6, 1.72]} rotation={[-0.62, 0, 0]} material={m.glass}><planeGeometry args={[2.2, 0.9]} /></mesh>
-      <mesh position={[0, 39.5, 2.2]} rotation={[0, 0, 0]} material={m.black}><boxGeometry args={[4.4, 6.6, 0.25]} /></mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 3.6, 38, 1.9]} rotation={[0, 0, s * -0.35]} material={m.white} castShadow><boxGeometry args={[4.2, 4.6, 0.3]} /></mesh>
+      <Strut a={[0.9, 8.2, -2.1]} b={[1.3, 10.4, -3.1]} r={0.03} />
+      <mesh position={[1.3, 10.45, -3.12]} material={m.steel}><sphereGeometry args={[0.09, 10, 8]} /></mesh>
+      {/* Docking ring on the nose, and the orbiter's own engine at the base */}
+      <mesh position={[0, 13.9, 0]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><torusGeometry args={[0.42, 0.07, 8, 28]} /></mesh>
+      <mesh position={[0, -0.5, 0]} material={m.darkSteel}><cylinderGeometry args={[0.7, 1.15, 1.1, 20, 1, true]} /></mesh>
+      {power && <group position={[0, -1, 0]}><Exhaust power={power} length={7} radius={0.9} color="#9fd0ff" glow /></group>}
+    </group>
+  );
+}
+
+/** Refs to the parts of the stack that leave during the climb, and the power of each set of engines. */
+export interface StackParts {
+  core?: React.Ref<THREE.Group>;
+  boosterL?: React.Ref<THREE.Group>;
+  boosterR?: React.Ref<THREE.Group>;
+  orbiter?: React.Ref<THREE.Group>;
+  boosterPower?: React.MutableRefObject<number>;
+  corePower?: React.MutableRefObject<number>;
+  orbiterPower?: React.MutableRefObject<number>;
+}
+
+/**
+ * The training launch vehicle: a core stage, two side boosters and the orbiter
+ * on top. Each part is its own group so it can separate.
+ */
+export function ShuttleStack({ parts }: { parts?: StackParts } = {}) {
+  const m = M();
+  return (
+    <group>
+      <group ref={parts?.core}>
+        <mesh position={[0, 19, 0]} material={m.hull} castShadow><cylinderGeometry args={[2.6, 2.6, 34, 28]} /></mesh>
+        <mesh position={[0, 30, 0]} material={m.navy}><cylinderGeometry args={[2.63, 2.63, 1.2, 28]} /></mesh>
+        <mesh position={[0, 8, 0]} material={m.red}><cylinderGeometry args={[2.63, 2.63, 0.6, 28]} /></mesh>
+        <mesh position={[0, 1.2, 0]} material={m.darkSteel}><cylinderGeometry args={[1.5, 2.2, 2.2, 20, 1, true]} /></mesh>
+        {/* Tank ribs and the fuel line that runs down the outside */}
+        {[5, 12, 16, 24, 27, 34].map((y) => <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><torusGeometry args={[2.62, 0.04, 6, 40]} /></mesh>)}
+        <mesh position={[0, 18, 2.68]} material={m.steel}><cylinderGeometry args={[0.14, 0.14, 26, 10]} /></mesh>
+        {parts?.corePower && <Exhaust power={parts.corePower} length={46} radius={2.4} color="#ffb46a" glow />}
+      </group>
+      {[-1, 1].map((sd) => (
+        <group key={sd} position={[sd * 3.9, 0, 0]}>
+          <group ref={sd < 0 ? parts?.boosterL : parts?.boosterR}>
+            <mesh position={[0, 14, 0]} material={m.white} castShadow><cylinderGeometry args={[1.25, 1.25, 26, 20]} /></mesh>
+            <mesh position={[0, 28.6, 0]} material={m.white} castShadow><coneGeometry args={[1.25, 3.2, 20]} /></mesh>
+            <mesh position={[0, 0.9, 0]} material={m.darkSteel}><cylinderGeometry args={[0.9, 1.4, 1.8, 16, 1, true]} /></mesh>
+            <mesh position={[0, 20, 0]} material={m.navy}><cylinderGeometry args={[1.27, 1.27, 0.8, 20]} /></mesh>
+            {/* Struts that hold the booster to the core until it lets go */}
+            {[8, 22].map((y) => <mesh key={y} position={[-sd * 1.3, y, 0]} material={m.darkSteel}><boxGeometry args={[1.3, 0.3, 0.3]} /></mesh>)}
+            {parts?.boosterPower && <Exhaust power={parts.boosterPower} length={38} radius={1.3} color="#ffd08a" glow />}
+          </group>
+        </group>
       ))}
-      <mesh position={[0, 38.3, -2.9]} material={m.white} castShadow><boxGeometry args={[0.3, 4.2, 2.4]} /></mesh>
-      <mesh position={[0, 41.5, -2.45]} rotation={[0, Math.PI, 0]} material={m.patch}><circleGeometry args={[1.1, 28]} /></mesh>
+      <group ref={parts?.orbiter} position={[0, 36, 0]}><Orbiter power={parts?.orbiterPower} /></group>
     </group>
   );
 }
@@ -356,6 +422,44 @@ export function LaunchTower({ height = 52 }: { height?: number }) {
   );
 }
 
+/** Docking collar, target cross and status ring. Kept separate so the real ISS model can wear them. */
+export function DockingPort({ portColor = '#35e07a' }: { portColor?: string }) {
+  const m = M();
+  return (
+    <group>
+      <mesh position={[0, 0, 0.1]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><cylinderGeometry args={[1.25, 1.5, 0.5, 28]} /></mesh>
+      <mesh position={[0, 0, 0.36]} material={m.black}><circleGeometry args={[1.1, 28]} /></mesh>
+      <mesh position={[0, 0, 0.38]}><ringGeometry args={[1.12, 1.26, 36]} /><meshBasicMaterial color={portColor} /></mesh>
+      <mesh position={[0, 0, 0.39]}><planeGeometry args={[1.5, 0.07]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+      <mesh position={[0, 0, 0.39]}><planeGeometry args={[0.07, 1.5]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+      <mesh position={[0, 0, 0.4]}><ringGeometry args={[0.28, 0.34, 24]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+    </group>
+  );
+}
+
+/**
+ * The station as every scene shows it: the real ISS model once it has loaded, wearing the
+ * docking port the simulation aims at, and the code-drawn station until then. The port
+ * faces +z and sits at the group's origin either way.
+ */
+export function Station({ portColor = '#35e07a' }: { portColor?: string }) {
+  const m = M();
+  return (
+    <RealAsset
+      kind="iss"
+      fallback={<StationExterior portColor={portColor} />}
+      modelPosition={[0, -12, -12]}
+      overlay={
+        <>
+          <DockingPort portColor={portColor} />
+          {/* Short connector from the port back toward the station body */}
+          <mesh position={[0, 0, -3.5]} rotation={[Math.PI / 2, 0, 0]} material={m.hull}><cylinderGeometry args={[1.6, 1.9, 7, 28]} /></mesh>
+        </>
+      }
+    />
+  );
+}
+
 /** Fictional orbital station seen from the approaching shuttle. The docking port faces +z. */
 export function StationExterior({ portColor = '#35e07a' }: { portColor?: string }) {
   const m = M();
@@ -363,18 +467,44 @@ export function StationExterior({ portColor = '#35e07a' }: { portColor?: string 
     <group>
       {/* Docking module and port */}
       <mesh position={[0, 0, -3]} rotation={[Math.PI / 2, 0, 0]} material={m.hull}><cylinderGeometry args={[2.2, 2.2, 6, 28]} /></mesh>
-      <mesh position={[0, 0, 0.1]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><cylinderGeometry args={[1.25, 1.5, 0.5, 28]} /></mesh>
-      <mesh position={[0, 0, 0.36]} material={m.black}><circleGeometry args={[1.1, 28]} /></mesh>
-      <mesh position={[0, 0, 0.38]}><ringGeometry args={[1.12, 1.26, 36]} /><meshBasicMaterial color={portColor} /></mesh>
-      <mesh position={[0, 0, 0.39]}><planeGeometry args={[1.5, 0.07]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
-      <mesh position={[0, 0, 0.39]}><planeGeometry args={[0.07, 1.5]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
-      <mesh position={[0, 0, 0.4]}><ringGeometry args={[0.28, 0.34, 24]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+      <DockingPort portColor={portColor} />
       {/* Node and crossing modules */}
       <mesh position={[0, 0, -8]} material={m.hull}><sphereGeometry args={[2.9, 24, 16]} /></mesh>
       <mesh position={[0, 0, -16]} rotation={[Math.PI / 2, 0, 0]} material={m.hull}><cylinderGeometry args={[2.3, 2.3, 12, 28]} /></mesh>
       <mesh position={[8, 0, -8]} rotation={[0, 0, Math.PI / 2]} material={m.hull}><cylinderGeometry args={[2.1, 2.1, 11, 28]} /></mesh>
       <mesh position={[-8, 0, -8]} rotation={[0, 0, Math.PI / 2]} material={m.hull}><cylinderGeometry args={[2.1, 2.1, 11, 28]} /></mesh>
       <mesh position={[0, 0, -8]} rotation={[0, 0, Math.PI / 2]} material={m.navy}><torusGeometry args={[2.95, 0.12, 8, 32]} /></mesh>
+      {/* Module seams, hatch rings on the node, a robotic arm and navigation lights */}
+      {[-12, -19.5].map((z) => <mesh key={z} position={[0, 0, z]} material={m.steel}><torusGeometry args={[2.36, 0.07, 8, 32]} /></mesh>)}
+      {[[0, 2.92, -8, Math.PI / 2, 0], [0, -2.92, -8, Math.PI / 2, 0]].map(([x, y, z, rx], i) => <mesh key={i} position={[x, y, z]} rotation={[rx, 0, 0]} material={m.darkSteel}><torusGeometry args={[0.8, 0.09, 8, 24]} /></mesh>)}
+      <Strut a={[3.2, 2.0, -9]} b={[6.5, 5.2, -6]} r={0.09} />
+      <Strut a={[6.5, 5.2, -6]} b={[9.6, 3.4, -2.6]} r={0.08} />
+      <mesh position={[6.5, 5.2, -6]} material={m.steel}><sphereGeometry args={[0.2, 12, 10]} /></mesh>
+      <mesh position={[9.6, 3.4, -2.6]} material={m.yellow}><boxGeometry args={[0.35, 0.35, 0.5]} /></mesh>
+      <mesh position={[13.95, 2.1, -8]}><sphereGeometry args={[0.16, 10, 8]} /><meshBasicMaterial color="#35e07a" /></mesh>
+      <mesh position={[-13.7, 2.1, -8]}><sphereGeometry args={[0.16, 10, 8]} /><meshBasicMaterial color="#ff3b30" /></mesh>
+      <mesh position={[0, 2.5, -21.8]}><sphereGeometry args={[0.16, 10, 8]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+      {/* Laboratory module: a band of windows and a ring of handrails */}
+      {[-11.5, -9.5, -7.5, -5.5].map((x) => <mesh key={x} position={[x, 0.9, -5.93]} material={m.glass}><circleGeometry args={[0.42, 16]} /></mesh>)}
+      {[-12.6, -3.4, 3.4, 12.6].map((x) => <mesh key={x} position={[x, 0, -8]} rotation={[0, Math.PI / 2, 0]} material={m.steel}><torusGeometry args={[2.16, 0.07, 8, 28]} /></mesh>)}
+      {/* End caps with a spare docking adapter on the far module */}
+      <mesh position={[13.6, 0, -8]} rotation={[0, 0, -Math.PI / 2]} material={m.steel}><cylinderGeometry args={[1.2, 1.5, 0.6, 24]} /></mesh>
+      <mesh position={[13.92, 0, -8]} rotation={[0, Math.PI / 2, 0]} material={m.black}><circleGeometry args={[1.05, 24]} /></mesh>
+      <mesh position={[-13.6, 0, -8]} rotation={[0, 0, Math.PI / 2]} material={m.white}><sphereGeometry args={[2.1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>
+      {/* Radiators: white panels that shed the station's waste heat, edge-on to the Sun */}
+      {[-11, 11].map((x) => (
+        <group key={x} position={[x, 4.2, -16]}>
+          <mesh position={[0, 0, 4.6]} material={m.white}><boxGeometry args={[0.12, 3, 6.5]} /></mesh>
+          <mesh position={[0, 0, -4.6]} material={m.white}><boxGeometry args={[0.12, 3, 6.5]} /></mesh>
+        </group>
+      ))}
+      {/* Communications dish and a pair of whip antennas */}
+      <group position={[4.5, 5.6, -16]} rotation={[0.5, 0.4, 0]}>
+        <Strut a={[0, -0.8, 0]} b={[0, 0.6, 0]} r={0.08} />
+        <mesh position={[0, 0.9, 0]} rotation={[Math.PI, 0, 0]} material={m.white}><sphereGeometry args={[1.3, 20, 10, 0, Math.PI * 2, 0, Math.PI / 3]} /></mesh>
+        <mesh position={[0, 0.2, 0]} material={m.steel}><cylinderGeometry args={[0.05, 0.05, 1.2, 8]} /></mesh>
+      </group>
+      {[-2.6, 2.6].map((x) => <Strut key={x} a={[x, 2.1, -20]} b={[x, 5.4, -21]} r={0.04} />)}
       {/* Truss and solar wings */}
       <mesh position={[0, 4.2, -16]} material={m.steel}><boxGeometry args={[56, 1.1, 1.1]} /></mesh>
       <Strut a={[0, 2.2, -16]} b={[0, 4.2, -16]} r={0.3} />

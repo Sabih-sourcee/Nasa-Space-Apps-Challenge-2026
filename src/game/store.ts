@@ -1,6 +1,7 @@
 // Application state: screens, the guest profile, the active mission run and
 // checkpoint saves. Simulation rules live in src/sim; this file only calls them.
 
+import { SEQUENCE_AFTER, SEQUENCE_INTO, type SequenceId } from '../sim/sequences';
 import { create } from 'zustand';
 import { DEMO_MISSIONS, missionAfter, missionStatus, nextMission, phaseIds } from '../sim/missions';
 import type { BatteryRun } from '../sim/lastBattery';
@@ -13,7 +14,7 @@ import { setAudioEnabled, setSpeechEnabled } from './audio';
 import { hud } from './hud';
 import { input } from './input';
 
-export type Screen = 'home' | 'atlas' | 'briefing' | 'mission' | 'debrief' | 'credits' | 'crew';
+export type Screen = 'home' | 'atlas' | 'briefing' | 'mission' | 'debrief' | 'credits' | 'crew' | 'gravity';
 export type Mode = 'campaign' | 'judge';
 
 export interface MissionResult {
@@ -72,6 +73,13 @@ interface GameState {
   storageOk: boolean;
   /** True while Commander Reyes is briefing: the scene starts on Take Control. */
   intro: boolean;
+  /** The journey sequence playing before the briefing, if any. Never saved: a reload goes to the mission. */
+  sequence: SequenceId | null;
+  /** The film playing after a mission, over the results screen. Never saved. */
+  outro: SequenceId | null;
+  outroSeen: boolean;
+  endOutro: () => void;
+  endSequence: () => void;
 
   init: () => void;
   setMode: (mode: Mode) => void;
@@ -162,7 +170,7 @@ export const useGame = create<GameState>((set, get) => {
     hud.reset();
     input.clear();
     input.setSuspended(false);
-    set({ run, screen: 'mission', result: null, paused: false, selected: run.missionId, intro: false });
+    set({ run, screen: 'mission', result: null, paused: false, selected: run.missionId, intro: false, sequence: null, outro: null, outroSeen: false });
   };
 
   return {
@@ -178,6 +186,12 @@ export const useGame = create<GameState>((set, get) => {
     settingsOpen: false,
     storageOk: true,
     intro: false,
+    sequence: null,
+    outro: null,
+    outroSeen: false,
+    // Finishing or skipping the closing film carries on exactly where Continue was going.
+    endOutro: () => { set({ outro: null }); get().continueAfterDebrief(); },
+    endSequence: () => set({ sequence: null }),
 
     init: () => {
       if (get().ready) return;
@@ -235,14 +249,15 @@ export const useGame = create<GameState>((set, get) => {
       saveCheckpoint(run);
       enterMission(run);
       // A fresh start opens with the commander's briefing.
-      set({ intro: true });
+      // The film that leads into the mission plays before the briefing, every time it is started. It can be skipped.
+      set({ intro: true, sequence: SEQUENCE_INTO[id] ?? null });
     },
 
     startMissionAt: (id, phase) => {
       // Judge Mode only: jump straight to a later checkpoint for a short demo.
       if (get().mode !== 'judge' || !phaseIds(id).includes(phase)) return;
       get().startMission(id);
-      set({ intro: false });
+      set({ intro: false, sequence: null });
       if (phase !== phaseIds(id)[0]) get().setPhase(phase);
     },
 
@@ -401,6 +416,12 @@ export const useGame = create<GameState>((set, get) => {
 
     continueAfterDebrief: () => {
       const result = get().result;
+      // The mission's closing film plays before moving on, once for each time it is completed. It can be skipped.
+      const after = result ? SEQUENCE_AFTER[result.missionId] : undefined;
+      if (result && after && !get().outroSeen) {
+        set({ outro: after, outroSeen: true });
+        return;
+      }
       const next = result ? missionAfter(result.missionId) : null;
       if (next && missionStatus(next, get().save.completed, get().mode === 'judge') !== 'locked') {
         set({ selected: next, screen: 'briefing', run: null });

@@ -61,6 +61,18 @@ export interface AscentState {
   resetReason: AscentReset;
 }
 
+/**
+ * Where the player takes over: just after the boosters have gone, 45 km up.
+ * The launch film covers the pad, liftoff and booster separation, so the mission
+ * begins with the vehicle already climbing and the first gate still ahead.
+ */
+export const HANDOVER_ALTITUDE = 45;
+
+export function makeAscentAloft(tier: Tier): AscentState {
+  const p = 1 - Math.sqrt(1 - HANDOVER_ALTITUDE / ORBIT_ALTITUDE);
+  return { ...makeAscent(tier), speed: p * ORBIT_SPEED, altitude: HANDOVER_ALTITUDE };
+}
+
 export function makeAscent(tier: Tier): AscentState {
   return {
     t: 0, speed: 0, altitude: 0, throttle: 0, fuel: ASCENT_TUNING[tier].fuel,
@@ -167,25 +179,106 @@ export const DOCK_TUNING: Record<Tier, DockTuning> = {
 export const DOCK_START_RANGE = 40;
 export const DOCK_RETRY_RANGE = 25;
 
+/** Gap between the two docking rings while the soft-capture ring is still extended, in metres. */
+export const DOCK_STANDOFF = 0.3;
+export const CAPTURE_SECONDS = 2.5;
+export const HARD_DOCK_SECONDS = 3;
+/** Cabin pressure on both sides of the hatch once the tunnel between them is filled, in kPa. */
+export const CABIN_PRESSURE = 101.3;
+export const PRESSURISE_SECONDS = 3.5;
+
+/**
+ * Docking, port to port. `range`, `x` and `y` are measured from the orbiter's
+ * docking ring to the station's port, not between the two vehicles' centres,
+ * and `closing`, `vx` and `vy` are the speeds of one ring toward the other.
+ *
+ * The steps after contact are a simplified training version of a real docking:
+ *   approach  -> the player flies the last 40 metres
+ *   capture   -> soft capture: latches catch and the ring pulls the ports into line
+ *   hardDock  -> the ring pulls in and hooks close, making a rigid joint
+ *   checks    -> the tunnel is filled with air and checked before the hatch opens
+ *   docked    -> hatch open
+ * Roll is held for the pilot the whole way: that is an assist, and the HUD says so.
+ */
 export interface DockState {
   t: number;
   range: number;
   closing: number;
   x: number; y: number; vx: number; vy: number;
   attempts: number;
-  status: 'approach' | 'docked' | 'aborted';
+  status: 'approach' | 'capture' | 'hardDock' | 'checks' | 'docked' | 'aborted';
   abortReason: '' | 'speed' | 'alignment';
+  /** Seconds spent in the current step after contact. */
+  stageT: number;
+  /** Gap left between the two rings. Closes to zero during the hard dock. */
+  standoff: number;
+  /** Air pressure in the tunnel between the two hatches, in kPa. */
+  pressure: number;
+  leakCheck: 'waiting' | 'running' | 'passed';
+  /** How the rings met, kept for the debrief. */
+  contactSpeed: number;
+  contactOff: number;
 }
 
 export function makeDock(): DockState {
-  return { t: 0, range: DOCK_START_RANGE, closing: 0.25, x: 2.6, y: -1.6, vx: 0, vy: 0, attempts: 1, status: 'approach', abortReason: '' };
+  return {
+    t: 0, range: DOCK_START_RANGE, closing: 0.25, x: 2.6, y: -1.6, vx: 0, vy: 0, attempts: 1, status: 'approach', abortReason: '',
+    stageT: 0, standoff: DOCK_STANDOFF, pressure: 0, leakCheck: 'waiting', contactSpeed: 0, contactOff: 0,
+  };
+}
+
+/** True while the docking is still going on: flying in, or working through the steps after contact. */
+export function dockActive(s: DockState): boolean {
+  return s.status !== 'docked' && s.status !== 'aborted';
+}
+
+export type DockStage = 'approach' | 'alignment' | 'final' | 'capture' | 'hardDock' | 'checks' | 'docked' | 'aborted';
+
+/** The step the docking is in, splitting the fly-in by distance. */
+export function dockStage(s: DockState): DockStage {
+  if (s.status !== 'approach') return s.status;
+  return s.range > 15 ? 'approach' : s.range > 5 ? 'alignment' : 'final';
+}
+
+/** The state at the end of the capture film, however it was reached: ports in line, rings together, tunnel empty. */
+function hardDocked(s: DockState): DockState {
+  return { ...s, status: 'checks', stageT: 0, x: 0, y: 0, vx: 0, vy: 0, closing: 0, range: 0, standoff: 0, pressure: 0, leakCheck: 'waiting' };
 }
 
 export function stepDock(prev: DockState, input: FlightInput, dt: number, tier: Tier): DockState {
-  if (prev.status !== 'approach') return prev;
+  if (!dockActive(prev)) return prev;
   const tune = DOCK_TUNING[tier];
   const s = { ...prev };
   s.t += dt;
+
+  if (s.status === 'capture' || s.status === 'hardDock') {
+    // Nothing to fly here. The action key skips ahead to exactly where the film ends.
+    if (input.action) return hardDocked(s);
+    s.stageT += dt;
+    if (s.status === 'capture') {
+      // The soft-capture ring soaks up the last sideways drift and lines the ports up.
+      const pull = Math.exp(-2.4 * dt);
+      s.x *= pull; s.y *= pull; s.vx = 0; s.vy = 0;
+      if (s.stageT >= CAPTURE_SECONDS) { s.status = 'hardDock'; s.stageT = 0; s.x = 0; s.y = 0; }
+    } else {
+      s.standoff = Math.max(0, DOCK_STANDOFF * (1 - s.stageT / HARD_DOCK_SECONDS));
+      if (s.stageT >= HARD_DOCK_SECONDS) return hardDocked(s);
+    }
+    return s;
+  }
+
+  if (s.status === 'checks') {
+    s.stageT += dt;
+    if (s.leakCheck === 'waiting') {
+      if (input.action) s.leakCheck = 'running';
+    } else if (s.leakCheck === 'running') {
+      s.pressure = Math.min(CABIN_PRESSURE, s.pressure + (CABIN_PRESSURE / PRESSURISE_SECONDS) * dt);
+      if (s.pressure >= CABIN_PRESSURE) s.leakCheck = 'passed';
+    } else if (input.action) {
+      s.status = 'docked';
+    }
+    return s;
+  }
 
   s.vx += clamp(input.steerX, -1, 1) * tune.thruster * dt;
   s.vy += clamp(input.steerY, -1, 1) * tune.thruster * dt;
@@ -206,10 +299,15 @@ export function stepDock(prev: DockState, input: FlightInput, dt: number, tier: 
 
   if (s.range <= 0) {
     s.range = 0;
-    const aligned = Math.hypot(s.x, s.y) <= tune.alignTol;
+    const off = Math.hypot(s.x, s.y);
+    const aligned = off <= tune.alignTol;
     const gentle = s.closing <= tune.maxClosing;
     if (aligned && gentle) {
-      s.status = 'docked';
+      // Contact inside the limits: the latches catch. A fast or crooked arrival never gets here.
+      s.status = 'capture';
+      s.stageT = 0;
+      s.contactSpeed = s.closing;
+      s.contactOff = off;
       s.closing = 0; s.vx = 0; s.vy = 0;
     } else {
       s.status = 'aborted';
@@ -222,10 +320,11 @@ export function stepDock(prev: DockState, input: FlightInput, dt: number, tier: 
 /** Recovery after a poor approach: the craft backs away and holds for another try. */
 export function retryDock(prev: DockState): DockState {
   return {
-    ...prev,
+    ...makeDock(),
+    t: prev.t,
     range: DOCK_RETRY_RANGE, closing: 0.2,
-    x: clamp(prev.x * 0.6, -3, 3), y: clamp(prev.y * 0.6, -3, 3), vx: 0, vy: 0,
-    attempts: prev.attempts + 1, status: 'approach', abortReason: '',
+    x: clamp(prev.x * 0.6, -3, 3), y: clamp(prev.y * 0.6, -3, 3),
+    attempts: prev.attempts + 1,
   };
 }
 
@@ -238,6 +337,8 @@ export function dockAutopilot(s: DockState, tier: Tier): FlightInput {
     steerY: want(s.y, s.vy),
     thrust: s.closing < targetClosing - 0.05,
     brake: s.closing > targetClosing + 0.05,
+    // After the hard dock: start the leak check, then open the hatch.
+    action: s.status === 'checks',
   };
 }
 
