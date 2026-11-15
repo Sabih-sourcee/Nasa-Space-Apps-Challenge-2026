@@ -156,6 +156,9 @@ export function EarthGlobe({ position, radius, spin = 0.01, below = false }: { p
 export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40, color = '#ffffff' }: {
   height: HeightFn; kind: GroundKind; size?: number; segments?: number; repeat?: number; color?: string;
 }) {
+  // The Moon and Mars ground use real NASA surface imagery; it replaces the painted
+  // texture once it has loaded, and the painted one stays if the file cannot be read.
+  const real = useRealGround(kind);
   const geom = useMemo(() => {
     const g = new THREE.PlaneGeometry(size, size, segments, segments);
     g.rotateX(-Math.PI / 2);
@@ -174,12 +177,12 @@ export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40,
     return g;
   }, [height, size, segments]);
   const mat = useMemo(() => {
-    const map = groundTexture(kind).clone();
+    const own = kind === 'moon' || kind === 'mars';
+    const map = (real?.map ?? groundTexture(kind)).clone();
     map.needsUpdate = true;
     map.repeat.set(repeat, repeat);
     // Moon and Mars have their own relief, lined up with the colour: crater rims, ripples and stones catch the sun.
-    const own = kind === 'moon' || kind === 'mars';
-    const bump = (own ? groundRelief(kind) : grainTexture()).clone();
+    const bump = (real?.rough ?? (own ? groundRelief(kind) : grainTexture())).clone();
     bump.needsUpdate = true;
     bump.repeat.set(own ? repeat : repeat * 2, own ? repeat : repeat * 2);
     const m = new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: own ? 2.4 : 1.2, roughness: 0.97, metalness: 0, color, vertexColors: true });
@@ -199,8 +202,33 @@ export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40,
       };
     }
     return m;
-  }, [kind, repeat, color]);
+  }, [kind, repeat, color, real]);
   return <mesh geometry={geom} material={mat} receiveShadow />;
+}
+
+// Real NASA surface imagery for the Moon and Mars ground, loaded once and shared.
+type GroundMaps = { map: THREE.Texture; rough: THREE.Texture };
+const groundPromise: Partial<Record<GroundKind, Promise<GroundMaps>>> = {};
+function loadGround(kind: 'moon' | 'mars'): Promise<GroundMaps> {
+  groundPromise[kind] ??= Promise.all([
+    new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}textures/${kind}_ground.jpg`),
+    new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}textures/${kind}_relief.jpg`),
+  ]).then(([map, rough]) => {
+    map.colorSpace = THREE.SRGBColorSpace;
+    for (const t of [map, rough]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; }
+    return { map, rough };
+  });
+  return groundPromise[kind] as Promise<GroundMaps>;
+}
+function useRealGround(kind: GroundKind): GroundMaps | null {
+  const [maps, setMaps] = useState<GroundMaps | null>(null);
+  useEffect(() => {
+    if (kind !== 'moon' && kind !== 'mars') return;
+    let on = true;
+    loadGround(kind).then((g) => { if (on) setMaps(g); }).catch(() => { /* keep the painted ground */ });
+    return () => { on = false; };
+  }, [kind]);
+  return maps;
 }
 
 export function Rocks({ rocks, color }: { rocks: RockSpec[]; color: string }) {
