@@ -15,7 +15,9 @@ import { hintsOn } from '../sim/save';
 import type { Tier } from '../sim/types';
 import { SunLight, useReducedMotion, useSim } from '../three/GameCanvas';
 import { LunarLander, MarsLander, Parachute, Sign, Strut } from '../three/Props';
-import { BlobShadow, EarthGlobe, Rocks, SkyDome, Stars, Terrain } from '../three/Scenery';
+import { siteHeight, useLandingSite } from '../three/landingSite';
+import { RealRocks } from '../three/models';
+import { BlobShadow, EarthGlobe, Rocks, SkyDome, Stars, Terrain, type GroundPhoto } from '../three/Scenery';
 import { makeHeight, scatterRocks } from '../three/terrain';
 import { ResetCard } from '../ui/Hud';
 
@@ -84,10 +86,13 @@ function World({ world, storm }: { world: LanderWorld; storm?: boolean }) {
     { x1: 0, z1: 0, x2: 0, z2: 0, r: 24, blend: 40 },
     ...(world === 'mars' ? [{ x1: 46, z1: 14, x2: 46, z2: 14, r: 20, blend: 30 }] : []),
   ], [world]);
-  const height = useMemo(() => makeHeight({
+  // The real site (Petavius crater / Olympus Mons caldera) replaces the painted ground once loaded.
+  const site = useLandingSite(world);
+  const height = useMemo(() => site ? siteHeight(site, flats) : makeHeight({
     seed: world === 'moon' ? 3 : 8, amp: world === 'moon' ? 9 : 14, scale: 0.006, flats,
     craters: world === 'moon' ? [{ x: -70, z: -60, r: 34, depth: 7 }, { x: 95, z: -40, r: 26, depth: 6 }, { x: 60, z: 90, r: 40, depth: 8 }, { x: -120, z: 60, r: 50, depth: 9 }] : [],
-  }), [world, flats]);
+  }), [world, flats, site]);
+  const photo = useMemo<GroundPhoto | undefined>(() => site ? { map: site.map, tile: site.spec.tile, u: site.spec.u, v: site.spec.v, detailMean: site.spec.detailMean } : undefined, [site]);
   const rocks = useMemo(() => scatterRocks(height, world === 'moon' ? 160 : 260, 420, world === 'moon' ? 31 : 32, flats, 0.3, 2.6), [height, world, flats]);
   if (world === 'moon') {
     return (
@@ -96,19 +101,19 @@ function World({ world, storm }: { world: LanderWorld; storm?: boolean }) {
         <hemisphereLight args={['#3a3d44', '#1a1a1c', 0.22]} />
         <SunLight direction={[-0.7, 0.42, 0.35]} intensity={4.6} size={60} />
         <EarthGlobe position={[-900, 1100, -3600]} radius={230} />
-        <Terrain height={height} kind="moon" size={1800} segments={200} repeat={110} />
-        <Rocks rocks={rocks} color="#84837f" />
+        <Terrain height={height} kind="moon" size={site ? 2400 : 1800} segments={site ? 256 : 200} repeat={110} photo={photo} />
+        <RealRocks world="moon" rocks={rocks} fallback={<Rocks rocks={rocks} color="#84837f" />} />
       </>
     );
   }
   return (
     <>
       <SkyDome top={storm ? '#8a5a3c' : '#b8845c'} horizon={storm ? '#c08a5c' : '#e3b98f'} radius={6000} />
-      <fogExp2 attach="fog" args={['#d9a779', 0.0011]} />
+      <fogExp2 attach="fog" args={['#d9a779', site ? 0.0006 : 0.0011]} />
       <hemisphereLight args={['#e8c39e', '#6b3e28', 0.85]} />
       <SunLight direction={[0.5, 0.6, 0.45]} intensity={2.7} color="#ffe0bd" size={60} />
-      <Terrain height={height} kind="mars" size={2400} segments={200} repeat={140} />
-      <Rocks rocks={rocks} color="#7c452c" />
+      <Terrain height={height} kind="mars" size={site ? 3200 : 2400} segments={site ? 256 : 200} repeat={140} photo={photo} />
+      <RealRocks world="mars" rocks={rocks} fallback={<Rocks rocks={rocks} color="#7c452c" />} />
     </>
   );
 }
