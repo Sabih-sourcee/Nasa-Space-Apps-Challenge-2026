@@ -21,25 +21,20 @@ interface ModelConfig {
   finish?: (root: THREE.Group) => void;
 }
 
-/** The launch stack is an untextured clay model: paint the tank, boosters, orbiter and engines by shape. */
+/**
+ * The launch stack is an untextured clay model: paint it by part. The parts are told
+ * apart by the names they have in the file, which do not depend on how the model is
+ * turned: `pCylinder8` is the external tank, `group13` the engine nozzles, and the
+ * rest (the two boosters and the orbiter) is white.
+ */
 function paintShuttle(root: THREE.Group) {
   const tank = new THREE.MeshStandardMaterial({ color: '#c07a3e', roughness: 0.85, metalness: 0.05 });
   const white = new THREE.MeshStandardMaterial({ color: '#e9e7e2', roughness: 0.55, metalness: 0.1 });
   const dark = new THREE.MeshStandardMaterial({ color: '#3a3f46', roughness: 0.5, metalness: 0.7 });
-  const box = new THREE.Box3();
-  const center = new THREE.Vector3();
-  const size = new THREE.Vector3();
   root.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
-    box.setFromObject(o);
-    box.getCenter(center);
-    box.getSize(size);
-    // Side columns are the two SRBs, the tall middle column is the external tank,
-    // small parts near the bottom are engines, everything else is the orbiter.
-    if (Math.abs(center.x) > 4.5 && size.y > 20) o.material = white;
-    else if (size.y > 20) o.material = tank;
-    else if (center.y < 4 && Math.max(size.x, size.y, size.z) < 6) o.material = dark;
-    else o.material = white;
+    const name = `${o.parent?.name ?? ''} ${o.name}`;
+    o.material = name.includes('pCylinder8') ? tank : name.includes('group13') ? dark : white;
   });
 }
 
@@ -49,7 +44,9 @@ const CONFIG: Record<NasaModel, ModelConfig> = {
   // Mars 2020 Perseverance Rover, NASA 3D Resources / JPL.
   perseverance: { file: 'perseverance', by: 'width', size: 3.0 },
   // Space Shuttle stack (orbiter, external tank and two SRBs), NASA 3D Resources. Untextured; painted in code.
-  shuttle: { file: 'shuttle', by: 'height', size: 45, rotate: [-Math.PI / 2, 0, 0], finish: paintShuttle },
+  // In the file the nose points along -Z and the orbiter sits on the +Y side of the tank, so a quarter turn
+  // about X stands it nose up with the orbiter facing the viewer.
+  shuttle: { file: 'shuttle', by: 'height', size: 45, rotate: [Math.PI / 2, 0, 0], finish: paintShuttle },
   // International Space Station, NASA 3D Resources (disconnected stray meshes removed).
   // Untextured clay; authored with the truss along z, turned so it lies along x like the painted station.
   iss: { file: 'iss', by: 'width', size: 56, rotate: [0, Math.PI / 2, 0] },
@@ -62,6 +59,15 @@ const CONFIG: Record<NasaModel, ModelConfig> = {
   // InSight Mars lander with solar panels and arm deployed, NASA 3D Resources / JPL.
   insight: { file: 'insight', by: 'width', size: 6.0 },
 };
+
+/**
+ * Where the Mobile Launcher model goes beside a pad, relative to a group placed 16 m to the
+ * left of the rocket. In the file the tower stands over the middle of the deck's long side,
+ * which put it through the rocket. A quarter turn moves the tower behind the rocket and
+ * leaves the deck under it.
+ */
+export const ML_AT: [number, number, number] = [16, 0, 3.6];
+export const ML_TURN: [number, number, number] = [0, Math.PI / 2, 0];
 
 let gltf: GLTFLoader | null = null;
 function loader(): GLTFLoader {

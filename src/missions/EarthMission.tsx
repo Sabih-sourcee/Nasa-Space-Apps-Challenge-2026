@@ -12,7 +12,7 @@ import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight, useReducedMotion } from '../three/GameCanvas';
 import { LaunchTower, M, Pouch, ShuttleStack, Sign, Strut } from '../three/Props';
-import { RealAsset } from '../three/models';
+import { ML_AT, ML_TURN, RealAsset } from '../three/models';
 import { ObjectiveMarker, SkyDome } from '../three/Scenery';
 import { groundTexture } from '../three/textures';
 import { WalkerRig, type Interactable } from '../three/WalkerRig';
@@ -51,7 +51,8 @@ export function EarthWorld({ follow, bare = false }: { follow?: React.MutableRef
       <group position={[40, 0, -190]}>
         <mesh position={[0, 1.5, 0]} material={m.darkSteel} receiveShadow castShadow><boxGeometry args={[30, 3, 30]} /></mesh>
         {!bare && <group position={[0, 3, 0]}><RealAsset kind="shuttle" fallback={<ShuttleStack />} /></group>}
-        {!bare && <group position={[-16, 3, 0]}><RealAsset kind="ml" fallback={<group position={[5, 0, 0]}><LaunchTower /></group>} /></group>}
+        {/* The real launcher is turned and moved so its tower stands behind the tank and its deck is under the stack. */}
+        {!bare && <group position={[-16, 3, 0]}><RealAsset kind="ml" fallback={<group position={[5, 0, 0]}><LaunchTower /></group>} modelPosition={ML_AT} modelRotation={ML_TURN} /></group>}
       </group>
       {/* Assembly building and hangars on the horizon */}
       <mesh position={[-150, 40, -330]} material={m.white}><boxGeometry args={[90, 80, 70]} /></mesh>

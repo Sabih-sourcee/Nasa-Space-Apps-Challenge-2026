@@ -350,3 +350,13 @@ Asked for: the 3D model functions, the model replacements and the landing terrai
 - Unverified: the ISS in the docking view (the pause menu was open when it was captured), the Space Exploration Vehicle, InSight and the two landing terrains on screen, and frame rate with the models loaded (Perseverance alone is 4.9 MB).
 - Known mismatch: the pad now shows the real Space Shuttle, with the orbiter on the side of an orange tank. The Liftoff film and the outside launch view still fly the code-drawn stack, with the orbiter on top, because its boosters and core stage are separate parts that can let go. The two do not look the same.
 - `npm test`: 283 passed.
+
+## Stage 21: the shuttle on the pad stood nose down (15 November 2026)
+
+Reported with a screenshot: on the title screen and in the first mission the rocket pointed at the ground, and all of it was orange.
+
+- **Cause.** In the model file the nose points along -Z. The loader turned it a quarter turn the wrong way about X, which stood it on its nose. The painting code told the parts apart by the size and place of their boxes, and both boosters are one part centred on the middle, so they and the orbiter's long body were all taken for the tank.
+- **Fix.** The quarter turn now goes the other way: nose up, orbiter facing the viewer. Parts are painted by the names they have in the file (`pCylinder8` is the tank, `group13` the engine nozzles, the rest white), which does not depend on how the model is turned.
+- **Also found.** The Mobile Launcher's tower stood through the rocket: measured in the scene, the tower's core was at the same place as the stack. The launcher is now turned a quarter turn and moved so the tower is behind the tank and the deck is under the stack, on the pad and in the launch film.
+- Checked in the browser on the title screen: the stack measured upright (3 m to 48 m), tank behind, orbiter in front, and it looks right. The first mission uses the same pad component; it was not opened separately. The launch film's launcher was not looked at.
+- `npm test`: 283 passed.
