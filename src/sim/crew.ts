@@ -563,7 +563,8 @@ export function botTurn(s: CrewSession, n: number): CrewResult | null {
 
 /** Crew Replay: which room changed first, and what that did downstream. */
 export function compareCrew(original: Outcome, originalLog: LogEntry[], replay: Outcome, replayLog: LogEntry[]): { same: boolean; firstRoom: RoomId | null; firstChange: string; rows: { label: string; first: number; replay: number; delta: number }[] } {
-  const acts = (l: LogEntry[]) => l.filter((e) => e.kind === 'task' || e.kind === 'choice' || e.kind === 'miss');
+  // Mistakes are not decisions: only finished tasks and choices are compared.
+  const acts = (l: LogEntry[]) => l.filter((e) => e.kind === 'task' || e.kind === 'choice');
   const A = acts(originalLog);
   const B = acts(replayLog);
   const i = B.findIndex((e, k) => !A[k] || A[k].text.replace(/^[^·:]+[·:]/, '') !== e.text.replace(/^[^·:]+[·:]/, ''));

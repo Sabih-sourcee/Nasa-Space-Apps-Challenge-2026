@@ -109,6 +109,7 @@ export function Home() {
             <Tile icon="gear" label="Settings" note="Sound and comfort" onClick={() => openSettings(true)} />
             <Tile icon="book" label="Science" note="What is real" onClick={() => go('credits')} />
           </div>
+          <Btn kind="blue" size="lg" block icon="crew" onClick={() => go('crew')}>Crew Ship · play together</Btn>
           <TierPicker compact />
         </nav>
       </div>

@@ -779,3 +779,73 @@ tr.key-row th, tr.key-row td { border-bottom-color: rgba(255, 200, 61, 0.5); }
 }
 .comic-art svg { max-height: 94%; width: auto; }
 .comic-burst svg { max-height: none; }
+
+/* ------------------------------------------------------------------ */
+/* Crew Ship                                                           */
+/* ------------------------------------------------------------------ */
+
+.crew-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; max-width: 1180px; margin: 0 auto 1em; }
+.crew-card { display: flex; flex-direction: column; gap: 0.6em; }
+.crew-card h2 { font-size: 1.25rem; font-weight: 900; }
+.crew-card p { margin: 0; color: var(--muted); flex: 1; }
+.crew-card-icon { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; color: #fff; background: linear-gradient(180deg, var(--blue-top), var(--blue-bot)); box-shadow: 0 4px 0 var(--blue-edge); }
+.code-field input { width: 100%; padding: 0.5em 0.7em; font: inherit; font-size: 1.5rem; font-weight: 900; letter-spacing: 0.2em; text-align: center; text-transform: uppercase; color: var(--text); background: var(--well); border: 2px solid var(--line-strong); border-radius: 14px; }
+.join-code { display: flex; flex-direction: column; align-items: center; padding: 0.3em 1.1em; border-radius: 16px; color: var(--gold-ink); background: linear-gradient(180deg, var(--gold-top), var(--gold-bot)); box-shadow: 0 4px 0 var(--gold-edge); }
+.join-code small { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+.join-code strong { font-size: 1.7rem; font-weight: 900; letter-spacing: 0.14em; line-height: 1.1; }
+.lobby-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; align-items: start; max-width: 1180px; margin: 0 auto; }
+.crew-list { list-style: none; padding: 0; margin: 0 0 0.4em; display: grid; gap: 6px; }
+.crew-row { display: flex; align-items: center; gap: 0.7em; padding: 0.45em 0.7em; border-radius: 12px; background: var(--well); border: 1.5px solid var(--line); }
+.crew-row.me { border-color: var(--gold); }
+.crew-role { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: rgba(95, 227, 255, 0.16); color: var(--cyan); }
+.crew-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.crew-name small { color: var(--muted); font-size: 0.76rem; }
+.role-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.role-btn, .incident { display: flex; flex-direction: column; align-items: center; gap: 0.15em; padding: 0.5em 0.4em; font: inherit; font-weight: 800; font-size: 0.82rem; color: var(--text); text-align: center; cursor: pointer; background: rgba(32, 56, 128, 0.55); border: 2px solid var(--line-strong); border-radius: 12px; box-shadow: 0 3px 0 var(--edge); }
+.role-btn small, .incident small { font-weight: 500; font-size: 0.72rem; color: var(--muted); }
+.role-btn.on, .incident.on { border-color: var(--gold); background: linear-gradient(180deg, rgba(255, 200, 61, 0.24), rgba(255, 160, 26, 0.1)); }
+.role-btn:disabled, .incident:disabled { cursor: default; }
+.role-btn:disabled:not(.on) { opacity: 0.55; }
+.incident-list { display: grid; gap: 6px; max-height: 320px; overflow-y: auto; padding-right: 4px; margin-bottom: 0.6em; }
+.incident { align-items: flex-start; text-align: left; padding: 0.5em 0.8em; font-size: 0.95rem; }
+.lobby-grid .tier-row { margin: 0.6em 0; }
+.lobby-grid .tier { border: 0; font: inherit; font-weight: 800; font-size: 0.84rem; text-transform: uppercase; background: none; color: var(--muted); }
+.lobby-grid .tier.on { color: #fff; background: linear-gradient(180deg, var(--blue-top), var(--blue-bot)); }
+.role-lines { list-style: none; padding: 0; margin: 0.4em 0 0; display: grid; gap: 4px; font-size: 0.88rem; }
+.role-lines li { display: flex; gap: 0.4em; align-items: flex-start; }
+.role-lines li.me { font-weight: 700; background: #fff3c4; border-radius: 8px; padding: 0.15em 0.4em; }
+.crew-tasks { list-style: none; padding: 0; margin: 0.2em 0 0; display: grid; gap: 2px; font-size: 0.9rem; font-weight: 600; }
+.crew-tasks li { display: flex; gap: 0.45em; align-items: center; }
+.crew-tasks li.done { color: var(--green); }
+.crew-tasks li.open { color: var(--text); }
+.crew-tasks li.open .icon { color: var(--gold); }
+.crew-tasks li.locked { color: var(--muted); }
+.crew-tasks small { font-weight: 500; color: var(--muted); }
+.crew-ship .hud-warning { pointer-events: auto; }
+.call-list { display: grid; gap: 5px; pointer-events: auto; }
+.log-line { display: block; font-size: 0.86rem; }
+.log-line.log-call { color: var(--gold); font-weight: 700; }
+.log-line.log-miss { color: #ffd58a; }
+.order-game { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.order-col { display: flex; flex-direction: column; gap: 6px; }
+.order-list { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; min-height: 5em; }
+.count-game { display: flex; align-items: center; justify-content: center; gap: 0.9em; flex-wrap: wrap; }
+.count-value { display: flex; flex-direction: column; align-items: center; min-width: 150px; }
+.count-value strong { font-size: 2.6rem; font-weight: 900; color: var(--gold); line-height: 1; }
+.count-value small { color: var(--muted); }
+.count-pips { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; color: var(--cyan); min-height: 20px; max-width: 170px; }
+.dial-game { display: flex; flex-direction: column; gap: 0.6em; align-items: center; }
+.dial-track { position: relative; width: 100%; height: 26px; border-radius: 13px; background: var(--well); border: 1.5px solid var(--line-strong); }
+.dial-band { position: absolute; top: 0; bottom: 0; background: rgba(63, 224, 138, 0.45); border-left: 2px solid var(--green); border-right: 2px solid var(--green); }
+.dial-knob { position: absolute; top: -5px; width: 12px; height: 34px; margin-left: -6px; border-radius: 6px; background: linear-gradient(180deg, var(--gold-top), var(--gold-bot)); box-shadow: 0 2px 0 var(--gold-edge); transition: left 0.12s ease; }
+.dial-read { display: flex; flex-direction: column; align-items: center; }
+.dial-read strong { font-size: 1.8rem; font-weight: 900; }
+.dial-read small { color: var(--muted); font-size: 0.8rem; }
+.mission-log { margin: 0; padding-left: 1.3em; display: grid; gap: 5px; font-size: 0.9rem; max-height: 340px; overflow-y: auto; }
+.mission-log small { display: block; color: var(--cyan); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.mission-log li.log-miss { color: #ffd58a; }
+.mission-log li.log-event { color: var(--muted); }
+.crew-ended { max-width: 520px; margin: 12vh auto; text-align: center; display: grid; gap: 0.8em; justify-items: center; }
+@media (max-width: 980px) {
+  .crew-cards, .lobby-grid, .order-game { grid-template-columns: 1fr; }
+}

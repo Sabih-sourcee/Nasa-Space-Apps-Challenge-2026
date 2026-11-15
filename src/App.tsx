@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { crewPos, useCrew } from './game/crewStore';
 import { hud, useHud } from './game/hud';
 import { input } from './game/input';
 import { probe } from './game/probe';
@@ -15,6 +16,7 @@ import type { DemoMissionId } from './sim/types';
 import { GameCanvas, simClock } from './three/GameCanvas';
 import { Btn, dialogOpen } from './ui/common';
 import { CommanderBriefing } from './ui/Commander';
+import { CrewShip } from './ui/CrewShip';
 import { Debrief } from './ui/Debrief';
 import { Hud, PauseMenu, TouchControls } from './ui/Hud';
 import { Atlas, Briefing, Credits, Home, SettingsDialog } from './ui/Screens';
@@ -69,7 +71,7 @@ export function App() {
     input.attach();
     useGame.getState().init();
     // Test hook for automated browser checks. It only exposes state the page already has.
-    (window as unknown as Record<string, unknown>).__beyondEarth = { game: useGame, hud: useHud, hudApi: hud, input, simClock, probe };
+    (window as unknown as Record<string, unknown>).__beyondEarth = { game: useGame, hud: useHud, hudApi: hud, input, simClock, probe, crew: useCrew, crewPos };
   }, []);
 
   useEffect(() => {
@@ -109,6 +111,7 @@ export function App() {
       {screen === 'mission' && <MissionScreen />}
       {screen === 'debrief' && <Debrief />}
       {screen === 'credits' && <Credits />}
+      {screen === 'crew' && <CrewShip />}
       <SettingsDialog />
       <Notes />
     </div>

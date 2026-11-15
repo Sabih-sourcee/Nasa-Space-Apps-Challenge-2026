@@ -298,6 +298,8 @@ export function LastBatteryMission() {
         ...(recoveries ? [{ label: 'Checkpoint recoveries', value: String(recoveries) }] : []),
       ],
       outpost: null, battery,
+      // The Crew Ship remembers whether the reserve battery came back nearly empty.
+      carry: { reserveSpent: state.charge <= 1 },
       rating: rateBattery(state.readiness, recoveries),
     }), 1500);
     return () => window.clearTimeout(timer);

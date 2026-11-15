@@ -17,7 +17,7 @@ Every result below marked "browser" went through the real input layer, the real 
 | --- | --- |
 | `npm install` | OK. react 19.3.1, three 0.187.0, @react-three/fiber 9.8.2, zustand 5.1.0, vite 8.3.8, typescript 7.0.2, vitest 5.1.0, @fontsource-variable/exo-2 5.3.0 |
 | `npx tsc --noEmit` | 0 errors |
-| `npm test` | 7 files, **180 passed**, 0 failed (15 November, after Stage 10) |
+| `npm test` | 8 files, **215 passed**, 0 failed (15 November, after Stage 11) |
 | `npm run build` | OK. `dist/` 1.51 MB JS (425 kB gzip), 54 kB CSS, five font files (126 kB, of which the browser loads the 41 kB Latin one) |
 | `npm run dev` | Serves on http://localhost:5173 |
 
@@ -87,6 +87,10 @@ Added after the first release to close FR-04. An extra station mission that unlo
 - Critical path: ignoring the leak on Advanced reached 40% after 240 s. The reset card appeared, the leak froze, and the retry returned to a fresh checkpoint.
 - Junior: the gauge names its trend (FALLING), the arm is steered by its gripper, and the Space key also works the gripper. Finished at 97% with the experiment saved.
 - **Fixed during this stage:** the transfer port sat just outside the shoulder joint's limit, so the arm could only get within 0.16 m. The port moved inside the arm's range, and a test now checks both targets against the joint limits.
+
+### Stage 11. Crew Ship (15 November): partly built
+
+A shared ship for 2 to 6 cadets, with solo training. Engine, mission service, lobby, 3D ship, task panels, debrief and Crew Replay are in. WorkAdventure was inspected and not run, because the Docker daemon was off. Only Last Meals on Board was played in the browser; the other four crew emergencies and the quick games are covered by unit tests only. The request to make the game look more realistic was not started. Full record, including what is not built: [CREW_SHIP.md](CREW_SHIP.md). `npm test`: 8 files, **215 passed**.
 
 ### Stage 10. Commander story and two ship missions (15 November): Pass, with limits below
 

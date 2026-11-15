@@ -23,7 +23,7 @@ Open http://localhost:5173. No account, no network access needed after the page 
 | `npm run dev` | Development server on port 5173 |
 | `npm run build` | Type check, then production build into `dist/` |
 | `npm run preview` | Serve the production build locally |
-| `npm test` | 180 simulation tests (Vitest) |
+| `npm test` | 215 simulation tests (Vitest) |
 | `npm run typecheck` | TypeScript only |
 
 ## The eight playable missions
@@ -40,6 +40,10 @@ Open http://localhost:5173. No account, no network access needed after the page 
 | M04 | Mars | Dust Storm Outpost | Parachute and engine landing, rover inspection, dust storm, outpost power decisions |
 
 E02, F01, S01, L02 and M04 are the five-world route: each unlocks the next. S04 is an extra station mission that opens after S01 and is not needed to reach the Moon. F03 and L03 are a two-part story off the main route: F03 opens after F01, L03 opens after F03, and neither blocks the route. The other 12 missions appear on the mission map as **Planned** when you press **Show all 20 missions**.
+
+## Crew Ship
+
+**Crew Ship · play together** on the title screen puts 2 to 6 cadets on one walkable ship with 15 rooms, or one cadet with three scripted crew members in Solo Training. A shared crew needs `npm run dev`, which also runs the mission service. Setup, the room map, the task catalogue, what passed and what is not built (including WorkAdventure) are in [docs/CREW_SHIP.md](docs/CREW_SHIP.md).
 
 ## How it plays
 
@@ -121,6 +125,7 @@ Saves live in `localStorage` under `beyondEarth.campaign.v1` and `beyondEarth.ju
 - [SRS matrix: Pass, Fail, Unverified](docs/SRS_MATRIX.md)
 - [Three-minute judge demo](docs/DEMO_SCRIPT.md)
 - [Science sources and credits](docs/SCIENCE_AND_CREDITS.md)
+- [Crew Ship: setup, ship map, tasks, acceptance matrix, demo](docs/CREW_SHIP.md)
 
 ## Pre-event prep notes
 
