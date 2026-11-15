@@ -26,3 +26,6 @@ npm-debug.log*
 data/moon/AVGVISIB_65S_240M_201608.TIF
 data/moon/AVGVISIB_75S_120M_201608.TIF
 data/moon/*_COG.TIF
+
+# Local WorkAdventure checkout used for the Crew Ship map (not part of this repo)
+.wa/
