@@ -106,8 +106,10 @@ export const DEMO_MISSIONS: Record<DemoMissionId, DemoMission> = {
       sourceId: 'gravity',
     },
     phases: [
-      { id: 'suit', label: 'Suit preflight', objective: 'Walk to the suit station and run the preflight check', checkpoint: 'Mission start' },
+      { id: 'supplies', label: 'Supply run', objective: 'Carry the food, the tools and the spare battery to the loading rack', checkpoint: 'Mission start' },
+      { id: 'suit', label: 'Suit preflight', objective: 'Walk to the suit station and run the preflight check', checkpoint: 'Supplies loaded' },
       { id: 'course', label: 'Gravity trainer', objective: 'Carry the equipment pouch to the training point', checkpoint: 'Suit cleared' },
+      { id: 'board', label: 'Secure and board', objective: 'Lock down the cargo rack, then board the crew transport', checkpoint: 'Drill complete' },
     ],
     tiers: {
       junior: 'Hints show the safe range for every gauge. One fault to find.',
@@ -124,7 +126,7 @@ export const DEMO_MISSIONS: Record<DemoMissionId, DemoMission> = {
       recovery: 'Restart from the mission start checkpoint, or continue once the gauge reads 4.3 psi.',
       debrief: 'You found the low-pressure reading before leaving the suit station, which is exactly when to find it.',
     }],
-    success: 'Suit cleared and the pouch delivered to the training point.',
+    success: 'Supplies loaded and secured, suit cleared, gravity drill done, and aboard the crew transport.',
     retry: 'Restart from the last checkpoint at any time from the pause menu.',
     milestone: undefined,
     labels: ['Fictional training procedure', 'Trainer gravity uses real Moon and Mars values'],
@@ -132,7 +134,7 @@ export const DEMO_MISSIONS: Record<DemoMissionId, DemoMission> = {
   F01: {
     id: 'F01', world: 'shuttle', title: 'Liftoff to Orbit',
     duty: 'Pilot',
-    goal: 'Complete the launch checklist, fly the shuttle through six guidance gates and cut the engines at orbital speed.',
+    goal: 'Take over after booster separation: run the climb checklist, fly through six guidance gates and cut the engines at orbital speed.',
     skill: 'Working a checklist, steering, and using the throttle and brake.',
     entry: 'Complete Earth: Gravity and Suit Lab.',
     requires: 'E02',
@@ -147,8 +149,8 @@ export const DEMO_MISSIONS: Record<DemoMissionId, DemoMission> = {
       sourceId: 'microgravity',
     },
     phases: [
-      { id: 'checklist', label: 'Launch checklist', objective: 'Complete the launch checklist', checkpoint: 'Mission start' },
-      { id: 'ascent', label: 'Ascent', objective: 'Hold Space to throttle up, then steer through the gates', checkpoint: 'Liftoff' },
+      { id: 'checklist', label: 'Climb checklist', objective: 'Complete the climb checklist', checkpoint: 'Boosters away' },
+      { id: 'ascent', label: 'Ascent', objective: 'Hold Space to throttle up, then steer through the gates', checkpoint: 'Manual control' },
     ],
     tiers: {
       junior: 'Wide gates, three misses allowed, plenty of fuel and a wide orbit speed band.',

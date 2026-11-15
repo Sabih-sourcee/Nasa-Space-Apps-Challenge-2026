@@ -37,12 +37,12 @@ const SCRIPTS: Record<DemoMissionId, Script> = {
     change: 'One suit on the rack is not holding its pressure. Nobody flies until it is found.',
     icon: 'gauge',
     assign: {
-      junior: 'Cadet, walk to the suit station and check all four items. Fix the one that reads wrong, then carry the pouch through the gravity lanes.',
-      middle: 'Cadet, run the suit check. One reading is off. Work out which one and why before you ask for clearance.',
-      advanced: 'Cadet, something is wrong with that suit, maybe more than one thing. The reference card is closed. Your call.',
+      junior: 'Cadet, load the supplies, then check all four suit items and fix the one that reads wrong. Finish with the gravity lanes, lock down the cargo and board.',
+      middle: 'Cadet, prepare the supplies, then run the suit check. One reading is off: work out which and why. Complete the movement drill before you board.',
+      advanced: 'Cadet, supplies first. Then that suit: something is wrong, maybe more than one thing, and the reference card is closed. Drill, cargo, board. Your call.',
     },
     stake: 'A leak found here costs a minute. A leak found outside costs the mission.',
-    first: 'Walk to the suit station on your left.',
+    first: 'Pick up the food crate from the supply shelf on your right.',
   },
   F01: {
     world: 'shuttle',

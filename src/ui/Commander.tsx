@@ -9,6 +9,8 @@ import { PLAYABLE, type DemoMissionId, type Tier } from '../sim/types';
 import { ReyesPortrait, WorldArt } from './art';
 import { Btn, Dialog, Stars } from './common';
 import { Icon } from './icons';
+import { SEQUENCES, sequencesFor, type SequenceId } from '../sim/sequences';
+import { SequencePlayer } from './SequencePlayer';
 
 /** Story facts earlier missions left in the save, for the briefing that follows them. */
 export function useCarry(): Carry {
@@ -94,11 +96,13 @@ export function MissionLog({ onClose }: { onClose: () => void }) {
   const save = useGame((s) => s.save);
   const judge = useGame((s) => s.mode === 'judge');
   const [watch, setWatch] = useState<DemoMissionId | null>(null);
+  const [journey, setJourney] = useState<SequenceId | null>(null);
   const open = PLAYABLE.filter((id) => missionStatus(id, save.completed, judge) !== 'locked');
+  if (journey) return <SequencePlayer id={journey} replay onDone={() => setJourney(null)} />;
   if (watch) return <CommanderBriefing missionId={watch} tier={save.settings.tier} replay onDone={() => setWatch(null)} />;
   return (
     <Dialog title="Mission Log" icon="book" kicker={`Briefings from ${COMMANDER}`} onClose={onClose} wide>
-      <p className="lead">Watch any briefing again. Missions you have not unlocked yet stay sealed.</p>
+      <p className="lead">Watch any briefing or film again. Missions you have not unlocked yet stay sealed.</p>
       <ul className="log-list">
         {open.map((id) => {
           const def = DEMO_MISSIONS[id];
@@ -111,7 +115,13 @@ export function MissionLog({ onClose }: { onClose: () => void }) {
                 <span className="log-note">{rec ? `Last debrief: ${rec.summary}` : 'Not flown yet.'}</span>
                 {rec && <Stars value={starsOf(rec)} size={15} />}
               </div>
-              <Btn kind="blue" size="sm" icon="play" onClick={() => setWatch(id)}>Briefing</Btn>
+              <div className="log-buttons">
+                {/* A mission's closing film stays sealed until the mission has been completed. */}
+                {sequencesFor(id).filter((q) => SEQUENCES[q].when === 'before' || rec).map((q) => (
+                  <Btn key={q} kind="ghost" size="sm" icon="rocket" onClick={() => setJourney(q)}>{SEQUENCES[q].title}</Btn>
+                ))}
+                <Btn kind="blue" size="sm" icon="play" onClick={() => setWatch(id)}>Briefing</Btn>
+              </div>
             </li>
           );
         })}

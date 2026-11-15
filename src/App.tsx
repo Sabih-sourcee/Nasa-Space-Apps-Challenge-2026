@@ -4,6 +4,7 @@ import { hud, useHud } from './game/hud';
 import { input } from './game/input';
 import { probe } from './game/probe';
 import { useGame } from './game/store';
+import { attachViewKey, useView, view } from './game/view';
 import { EarthMission, HomeScene } from './missions/EarthMission';
 import { MarsMission } from './missions/MarsMission';
 import { LastBatteryMission } from './missions/LastBatteryMission';
@@ -18,6 +19,7 @@ import { Btn, dialogOpen } from './ui/common';
 import { CommanderBriefing } from './ui/Commander';
 import { CrewShip } from './ui/CrewShip';
 import { GravityLab } from './ui/GravityLab';
+import { SequencePlayer } from './ui/SequencePlayer';
 import { Debrief } from './ui/Debrief';
 import { Hud, PauseMenu, TouchControls } from './ui/Hud';
 import { Atlas, Briefing, Credits, Home, SettingsDialog } from './ui/Screens';
@@ -37,7 +39,11 @@ function MissionScreen() {
   const run = useGame((s) => s.run);
   const intro = useGame((s) => s.intro);
   const endIntro = useGame((s) => s.endIntro);
+  const sequence = useGame((s) => s.sequence);
+  const endSequence = useGame((s) => s.endSequence);
   if (!run) return null;
+  // Journey first, then the commander's briefing, then the controls are yours.
+  if (sequence) return <div className="mission"><SequencePlayer id={sequence} onDone={endSequence} /></div>;
   // The scene is not started until the player takes control, so nothing happens behind the briefing.
   if (intro) return <div className="mission"><CommanderBriefing missionId={run.missionId} tier={run.tier} onDone={endIntro} /></div>;
   const Scene = SCENES[run.missionId];
@@ -67,12 +73,15 @@ export function App() {
   const ready = useGame((s) => s.ready);
   const screen = useGame((s) => s.screen);
   const reduced = useGame((s) => s.save.settings.reducedMotion);
+  const outro = useGame((s) => s.outro);
+  const endOutro = useGame((s) => s.endOutro);
 
   useEffect(() => {
     input.attach();
+    attachViewKey();
     useGame.getState().init();
     // Test hook for automated browser checks. It only exposes state the page already has.
-    (window as unknown as Record<string, unknown>).__beyondEarth = { game: useGame, hud: useHud, hudApi: hud, input, simClock, probe, crew: useCrew, crewPos };
+    (window as unknown as Record<string, unknown>).__beyondEarth = { game: useGame, hud: useHud, hudApi: hud, input, simClock, probe, crew: useCrew, crewPos, view, useView };
   }, []);
 
   useEffect(() => {
@@ -114,6 +123,7 @@ export function App() {
       {screen === 'credits' && <Credits />}
       {screen === 'crew' && <CrewShip />}
       {screen === 'gravity' && <GravityLab />}
+      {outro && <SequencePlayer key={outro} id={outro} onDone={endOutro} />}
       <SettingsDialog />
       <Notes />
     </div>

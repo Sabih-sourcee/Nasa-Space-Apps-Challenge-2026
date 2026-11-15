@@ -4,12 +4,13 @@ import * as THREE from 'three';
 import { playCue } from '../game/audio';
 import { hud } from '../game/hud';
 import { useGame } from '../game/store';
+import { RESTRAINTS, SUPPLIES, allLoaded, cargoChecklist, load, makeCargo, nextSupply, pickUp, secureLabel, secureStep, secured, type CargoState, type SupplyId } from '../sim/cargo';
 import { GRAVITY_PRESETS, idealAirtime, makeWalker, type GravityId, type WalkEnv, type WalkerState } from '../sim/movement';
 import { hintsOn } from '../sim/save';
 import { rateSuitLab } from '../sim/score';
 import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
-import { GameCanvas, SunLight } from '../three/GameCanvas';
+import { GameCanvas, SunLight, useReducedMotion } from '../three/GameCanvas';
 import { LaunchTower, M, Pouch, ShuttleStack, Sign, Strut } from '../three/Props';
 import { ObjectiveMarker, SkyDome } from '../three/Scenery';
 import { groundTexture } from '../three/textures';
@@ -18,9 +19,11 @@ import { Btn, Comm, Dialog } from '../ui/common';
 import { Icon } from '../ui/icons';
 
 const SUN: [number, number, number] = [0.45, 0.85, 0.5];
+const EMPTY_CARGO = makeCargo();
 
 /** Launch-site environment shared by the home screen and the Earth mission. */
-export function EarthWorld({ follow }: { follow?: React.MutableRefObject<{ x: number; y?: number; z: number }> }) {
+/** `bare` leaves the rocket and tower off the pad, for the launch film, which flies its own. */
+export function EarthWorld({ follow, bare = false }: { follow?: React.MutableRefObject<{ x: number; y?: number; z: number }>; bare?: boolean }) {
   const m = M();
   const concrete = useMemo(() => {
     const t = groundTexture('concrete').clone();
@@ -46,8 +49,8 @@ export function EarthWorld({ follow }: { follow?: React.MutableRefObject<{ x: nu
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[40, 0.01, -120]} material={concrete} receiveShadow><planeGeometry args={[26, 120]} /></mesh>
       <group position={[40, 0, -190]}>
         <mesh position={[0, 1.5, 0]} material={m.darkSteel} receiveShadow castShadow><boxGeometry args={[30, 3, 30]} /></mesh>
-        <group position={[0, 3, 0]}><ShuttleStack /></group>
-        <group position={[-11, 3, 0]}><LaunchTower /></group>
+        {!bare && <group position={[0, 3, 0]}><ShuttleStack /></group>}
+        {!bare && <group position={[-11, 3, 0]}><LaunchTower /></group>}
       </group>
       {/* Assembly building and hangars on the horizon */}
       <mesh position={[-150, 40, -330]} material={m.white}><boxGeometry args={[90, 80, 70]} /></mesh>
@@ -64,6 +67,8 @@ export function HomeScene() {
   const anim = useRef(makeAnim('walk'));
   const focus = useRef({ x: 30.8, y: 0, z: -113.4 });
   const body = useRef<THREE.Group>(null);
+  const vapour = useRef<THREE.Group>(null);
+  const reduced = useReducedMotion();
   const mouse = useRef({ x: 0, y: 0 });
   const eased = useRef({ x: 0, y: 0 });
   // The menu sits over the canvas, so the pointer is read from the window.
@@ -72,7 +77,7 @@ export function HomeScene() {
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
   }, []);
-  useFrame(({ camera }, delta) => {
+  useFrame(({ camera, clock }, delta) => {
     const k = 1 - Math.exp(-3 * Math.min(delta, 0.1));
     eased.current.x += (mouse.current.x - eased.current.x) * k;
     eased.current.y += (mouse.current.y - eased.current.y) * k;
@@ -80,10 +85,24 @@ export function HomeScene() {
     camera.position.set(27.5 + eased.current.x * 1.6, 1.6 - eased.current.y * 0.5, -105);
     camera.lookAt(30 + eased.current.x * 5, 13.5 - eased.current.y * 3, -190);
     if (body.current) body.current.rotation.y = -0.37 + eased.current.x * 0.9;
+    // Vapour drifts slowly off the pad. With reduced motion it holds still.
+    const t = clock.elapsedTime;
+    vapour.current?.children.forEach((p, i) => {
+      const k = reduced ? 0.5 : (t * 0.05 + i * 0.137) % 1;
+      const side = i % 2 ? 1 : -1;
+      p.position.set(40 + side * (7 + k * 26) + Math.sin(i * 2.1) * 4, 4.5 + k * 5 + (i % 3) * 1.6, -190 + Math.cos(i * 1.7) * 9);
+      p.scale.setScalar(4.5 + k * 9);
+      ((p as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - k);
+    });
   });
   return (
     <>
       <EarthWorld follow={focus} />
+      <group ref={vapour}>
+        {Array.from({ length: 12 }, (_, i) => (
+          <mesh key={i}><sphereGeometry args={[1, 12, 10]} /><meshBasicMaterial color={i % 2 ? '#f3efe8' : '#e2ddd4'} transparent opacity={0.4} depthWrite={false} /></mesh>
+        ))}
+      </group>
       <group ref={body} position={[30.8, 0, -113.4]} rotation={[0, -0.37, 0]}>
         <Astronaut anim={anim} still />
       </group>
@@ -233,16 +252,140 @@ const LANE = 2.3;
 const STATION = { x: -5, z: 4 };
 const TABLE = { x: 4.5, z: 3.5 };
 const GOAL = { x: 0, z: -33 };
+/** The supply run: a shelf to take things from and a rack to load them into, both near the start. */
+const SHELF = { x: 9.5, z: 8 };
+const RACK = { x: 9.5, z: 1 };
+/** After the drill the loaded rack is waiting on its cart beside the pad road, next to the crew transport. */
+const CART = { x: 7.5, z: -34 };
+const VAN = { x: -8, z: -35.2 };
+
+/** One supply item, small enough to carry in both hands. */
+export function SupplyItem({ id }: { id: SupplyId }) {
+  const m = M();
+  if (id === 'food') {
+    return (
+      <group>
+        <mesh castShadow><boxGeometry args={[0.52, 0.34, 0.36]} /><meshStandardMaterial color="#c9a56b" roughness={0.9} /></mesh>
+        <mesh position={[0, 0, 0.185]}><planeGeometry args={[0.3, 0.16]} /><meshStandardMaterial color="#3f9d5a" roughness={0.8} /></mesh>
+        <mesh position={[0, 0.172, 0]} material={m.white}><boxGeometry args={[0.54, 0.02, 0.07]} /></mesh>
+      </group>
+    );
+  }
+  if (id === 'tools') {
+    return (
+      <group>
+        <mesh material={m.red} castShadow><boxGeometry args={[0.56, 0.26, 0.3]} /></mesh>
+        <mesh position={[0, 0.17, 0]} material={m.darkSteel}><boxGeometry args={[0.22, 0.05, 0.05]} /></mesh>
+        {[-0.2, 0.2].map((x) => <mesh key={x} position={[x, 0.02, 0.155]} material={m.steel}><boxGeometry args={[0.07, 0.07, 0.02]} /></mesh>)}
+      </group>
+    );
+  }
+  return (
+    <group>
+      <mesh material={m.darkSteel} castShadow><boxGeometry args={[0.5, 0.34, 0.3]} /></mesh>
+      <mesh position={[0, 0.2, 0]} material={m.yellow}><boxGeometry args={[0.3, 0.06, 0.08]} /></mesh>
+      {[0, 1, 2, 3].map((i) => (
+        <mesh key={i} position={[-0.165 + i * 0.11, 0, 0.155]}>
+          <boxGeometry args={[0.08, 0.2, 0.02]} />
+          <meshStandardMaterial color="#35e07a" emissive="#35e07a" emissiveIntensity={1.4} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+const SLOT_Y: Record<SupplyId, number> = { food: 1.42, tools: 0.92, battery: 0.42 };
+
+/** The loading rack: three slots, a door that closes over them, and two restraint straps with latches. */
+function CargoRack({ cargo, onCart = false }: { cargo: CargoState; onCart?: boolean }) {
+  const m = M();
+  const door = useRef<THREE.Group>(null);
+  useFrame((_, d) => {
+    if (!door.current) return;
+    const to = cargo.door ? 0 : -1.9;
+    door.current.rotation.y += (to - door.current.rotation.y) * (1 - Math.exp(-7 * Math.min(d, 0.1)));
+  });
+  return (
+    <group position={[0, onCart ? 0.38 : 0, 0]}>
+      {onCart && (
+        <group position={[0, -0.38, 0]}>
+          <mesh position={[0, 0.3, 0]} material={m.darkSteel} castShadow><boxGeometry args={[1.5, 0.12, 1.0]} /></mesh>
+          {[[-0.6, -0.42], [0.6, -0.42], [-0.6, 0.42], [0.6, 0.42]].map(([x, z], i) => (
+            <mesh key={i} position={[x, 0.16, z]} rotation={[Math.PI / 2, 0, 0]} material={m.black}><cylinderGeometry args={[0.16, 0.16, 0.1, 16]} /></mesh>
+          ))}
+          <Strut a={[-0.75, 0.36, 0]} b={[-1.5, 0.9, 0]} r={0.035} />
+        </group>
+      )}
+      {/* Frame, back and shelves */}
+      {[[-0.55, -0.3], [0.55, -0.3], [-0.55, 0.3], [0.55, 0.3]].map(([x, z], i) => <Strut key={i} a={[x, 0, z]} b={[x, 1.85, z]} r={0.04} />)}
+      <mesh position={[0, 0.93, -0.3]} material={m.navy}><boxGeometry args={[1.14, 1.82, 0.04]} /></mesh>
+      {[0.18, 0.68, 1.18, 1.82].map((y) => <mesh key={y} position={[0, y, 0]} material={m.steel} castShadow><boxGeometry args={[1.14, 0.05, 0.62]} /></mesh>)}
+      {SUPPLIES.map((x) => cargo.loaded.includes(x.id) && <group key={x.id} position={[0, SLOT_Y[x.id], 0]}><SupplyItem id={x.id} /></group>)}
+      {/* Door, hinged on the left */}
+      <group ref={door} position={[-0.57, 0, 0.33]} rotation={[0, -1.9, 0]}>
+        <mesh position={[0.57, 0.93, 0]}>
+          <boxGeometry args={[1.14, 1.78, 0.04]} />
+          <meshStandardMaterial color="#b8c4d2" roughness={0.3} metalness={0.2} transparent opacity={0.38} />
+        </mesh>
+        <mesh position={[0.57, 0.93, 0.03]} material={m.steel}><boxGeometry args={[1.18, 0.06, 0.03]} /></mesh>
+      </group>
+      {/* Restraints: each strap appears across the door with its latch lit when fastened */}
+      {[0.55, 1.3].map((y, i) => cargo.restraints > i && (
+        <group key={y} position={[0, y, 0.38]}>
+          <mesh material={m.yellow}><boxGeometry args={[1.3, 0.09, 0.03]} /></mesh>
+          <mesh position={[0.55, 0, 0.03]}><boxGeometry args={[0.14, 0.14, 0.05]} /><meshStandardMaterial color="#35e07a" emissive="#35e07a" emissiveIntensity={1.2} /></mesh>
+        </group>
+      ))}
+      <Sign lines={['LOADING RACK']} position={[0, 2.12, 0]} size={[1.5, 0.42]} accent={secured(cargo) ? '#35e07a' : undefined} />
+    </group>
+  );
+}
+
+/** The van that carries the crew to the pad. Its side door stands open. */
+function CrewTransport() {
+  const m = M();
+  return (
+    <group>
+      <mesh position={[0, 1.15, 0]} material={m.white} castShadow><boxGeometry args={[4.6, 1.7, 2.1]} /></mesh>
+      <mesh position={[0, 0.42, 0]} material={m.navy}><boxGeometry args={[4.62, 0.5, 2.12]} /></mesh>
+      <mesh position={[-1.5, 1.45, 1.06]} material={m.glass}><planeGeometry args={[1.2, 0.7]} /></mesh>
+      <mesh position={[2.31, 1.4, 0]} rotation={[0, Math.PI / 2, 0]} material={m.glass}><planeGeometry args={[1.7, 0.8]} /></mesh>
+      {/* Open doorway and a step */}
+      <mesh position={[0.6, 1.0, 1.06]} material={m.black}><planeGeometry args={[1.1, 1.5]} /></mesh>
+      <mesh position={[0.6, 0.2, 1.3]} material={m.steel}><boxGeometry args={[1.1, 0.08, 0.4]} /></mesh>
+      {[[-1.5, -1.0], [1.5, -1.0], [-1.5, 1.0], [1.5, 1.0]].map(([x, z], i) => (
+        <mesh key={i} position={[x, 0.36, z]} rotation={[Math.PI / 2, 0, 0]} material={m.black}><cylinderGeometry args={[0.36, 0.36, 0.26, 20]} /></mesh>
+      ))}
+      <mesh position={[0, 1.55, 1.07]} material={m.red}><planeGeometry args={[4.4, 0.12]} /></mesh>
+      <Sign lines={['CREW TRANSPORT', 'To the launch pad']} position={[0, 2.5, 0]} size={[2.8, 0.8]} />
+    </group>
+  );
+}
 
 function zoneAt(s: { x: number; z: number }): GravityId {
   if (Math.abs(s.x) > LANE + 0.4) return 'earth';
   return ZONES.find((z) => s.z <= z.from && s.z > z.to)?.id ?? 'earth';
 }
 
-function Yard({ cleared, carrying, delivered }: { cleared: boolean; carrying: boolean; delivered: boolean }) {
+export function Yard({ cleared, carrying, delivered, cargo, atPad = false }: { cleared: boolean; carrying: boolean; delivered: boolean; cargo?: CargoState; atPad?: boolean }) {
   const m = M();
+  const stock = cargo ?? EMPTY_CARGO;
   return (
     <group>
+      {/* Supply shelf: what is still waiting to be loaded */}
+      <group position={[SHELF.x, 0, SHELF.z]}>
+        <mesh position={[0, 0.82, 0]} material={m.steel} castShadow><boxGeometry args={[2.4, 0.08, 0.8]} /></mesh>
+        {[[-1.1, -0.3], [1.1, -0.3], [-1.1, 0.3], [1.1, 0.3]].map(([x, z], i) => <Strut key={i} a={[x, 0, z]} b={[x, 0.8, z]} r={0.035} />)}
+        {SUPPLIES.map((x, i) => !stock.loaded.includes(x.id) && stock.carrying !== x.id && (
+          <group key={x.id} position={[-0.75 + i * 0.75, 1.03, 0]}><SupplyItem id={x.id} /></group>
+        ))}
+        <Sign lines={['SUPPLIES', 'Food · Tools · Battery']} position={[0, 0.42, 0.41]} size={[2.2, 0.62]} />
+      </group>
+      {/* Loading rack: by the shelf to begin with, and on its cart by the pad road once the drill is done */}
+      <group position={atPad ? [CART.x, 0, CART.z] : [RACK.x, 0, RACK.z]} rotation={[0, atPad ? -0.5 : -Math.PI / 2, 0]}>
+        <CargoRack cargo={stock} onCart={atPad} />
+      </group>
+      {atPad && <group position={[VAN.x, 0, VAN.z]} rotation={[0, 0.35, 0]}><CrewTransport /></group>}
       {/* Suit station */}
       <group position={[STATION.x, 0, STATION.z]}>
         {[[-1.4, -1], [1.4, -1], [-1.4, 1], [1.4, 1]].map(([x, z], i) => <Strut key={i} a={[x, 0, z]} b={[x, 3, z]} r={0.06} />)}
@@ -319,14 +462,20 @@ export function EarthMission() {
   const setPhase = useGame((s) => s.setPhase);
   const complete = useGame((s) => s.completeMission);
   const tier = run.tier;
-  const cleared = run.phase === 'course';
+  // Four checkpoints: supplies, suit, gravity drill, then secure the cargo and board.
+  const phase = run.phase;
+  const cleared = phase === 'course' || phase === 'board';
   const hints = hintsOn(settings, tier);
 
   const walker = useRef(makeWalker(0, 8.5));
   const [panel, setPanel] = useState(false);
   const [checks, setChecks] = useState<Record<string, CheckState>>({});
   const [carrying, setCarrying] = useState(false);
-  const [delivered, setDelivered] = useState(false);
+  const [delivered, setDelivered] = useState(phase === 'board');
+  // A later checkpoint starts with the rack already full.
+  const [cargo, setCargo] = useState<CargoState>(() => makeCargo(phase !== 'supplies'));
+  const [boarded, setBoarded] = useState(false);
+  const baseline = useRef(false);
   const mistakes = useRef(run.stats.suitMistakes ?? 0);
   const airtimes = useRef<Record<GravityId, number>>({ earth: 0, mars: 0, moon: 0 });
   const jumpZone = useRef<GravityId>('earth');
@@ -346,7 +495,11 @@ export function EarthMission() {
     ];
     const base = {
       ground: () => 0,
-      circles: [{ x: STATION.x, z: STATION.z - 0.7, r: 0.9 }, { x: TABLE.x, z: TABLE.z, r: 0.8 }],
+      circles: [
+        { x: STATION.x, z: STATION.z - 0.7, r: 0.9 }, { x: TABLE.x, z: TABLE.z, r: 0.8 },
+        { x: SHELF.x - 0.7, z: SHELF.z, r: 0.6 }, { x: SHELF.x + 0.7, z: SHELF.z, r: 0.6 },
+        ...(phase === 'board' ? [{ x: CART.x, z: CART.z, r: 0.95 }, { x: VAN.x - 1.2, z: VAN.z, r: 1.3 }, { x: VAN.x + 1.2, z: VAN.z, r: 1.3 }] : [{ x: RACK.x, z: RACK.z, r: 0.8 }]),
+      ],
       boxes,
       bounds: { minX: -15, maxX: 15, minZ: -38, maxZ: 12 },
       radius: 0.38,
@@ -358,30 +511,50 @@ export function EarthMission() {
     };
     // The trainer harness holds its setting until you land, so a long Moon jump is measured fairly.
     return (s: WalkerState) => byZone[s.grounded ? zoneAt(s) : jumpZone.current];
-  }, [cleared]);
+  }, [cleared, phase]);
 
+  const supply = nextSupply(cargo);
+  const nameOf = (id: SupplyId | null) => SUPPLIES.find((x) => x.id === id)?.name ?? 'item';
   const interactables = (): Interactable[] => [
-    { id: 'station', x: STATION.x, z: STATION.z + 0.6, r: 2.4, label: 'Run the suit preflight check', enabled: !cleared },
-    { id: 'pouch', x: TABLE.x, z: TABLE.z + 0.6, r: 2.2, label: 'Pick up the equipment pouch', enabled: cleared && !carrying && !delivered },
+    { id: 'shelf', x: SHELF.x, z: SHELF.z - 0.7, r: 2.3, label: `Pick up the ${nameOf(supply)}`, enabled: phase === 'supplies' && !cargo.carrying && !!supply },
+    { id: 'rack', x: RACK.x - 0.8, z: RACK.z, r: 2.3, label: `Load the ${nameOf(cargo.carrying)} into the rack`, enabled: phase === 'supplies' && !!cargo.carrying },
+    { id: 'cart', x: CART.x - 0.5, z: CART.z + 0.9, r: 2.4, label: secureLabel(cargo), enabled: phase === 'board' && !secured(cargo) },
+    { id: 'van', x: VAN.x + 0.8, z: VAN.z + 1.9, r: 2.6, label: 'Board the crew transport', enabled: phase === 'board' && secured(cargo) && !boarded },
+    { id: 'station', x: STATION.x, z: STATION.z + 0.6, r: 2.4, label: 'Run the suit preflight check', enabled: phase === 'suit' },
+    { id: 'pouch', x: TABLE.x, z: TABLE.z + 0.6, r: 2.2, label: 'Pick up the equipment pouch', enabled: phase === 'course' && !carrying && !delivered },
     { id: 'goal', x: GOAL.x, z: GOAL.z, r: 2.4, label: 'Set the pouch down at the training point', enabled: carrying },
   ];
 
-  const finish = () => {
+  /** The drill is over at the training point: save the jump times and move on to the cargo and boarding. */
+  const drillDone = () => {
     setCarrying(false);
     setDelivered(true);
     const a = airtimes.current;
+    playCue('checkpoint');
+    hud.say('Drill complete. Your loaded rack is on the cart beside you. Lock it down, then board the crew transport.');
+    setPhase('board', { stats: { airEarth: Math.round(a.earth * 100), airMars: Math.round(a.mars * 100), airMoon: Math.round(a.moon * 100) } });
+  };
+
+  const finish = () => {
+    setBoarded(true);
+    // After a reload the jump times come back from the checkpoint.
+    const saved: Record<GravityId, number> = { earth: (run.stats.airEarth ?? 0) / 100, mars: (run.stats.airMars ?? 0) / 100, moon: (run.stats.airMoon ?? 0) / 100 };
+    const a: Record<GravityId, number> = { earth: airtimes.current.earth || saved.earth, mars: airtimes.current.mars || saved.mars, moon: airtimes.current.moon || saved.moon };
     const fmt = (id: GravityId) => `${(a[id] || idealAirtime(GRAVITY_PRESETS[id])).toFixed(2)} s${a[id] ? '' : ' (not jumped: expected value)'}`;
     const n = mistakes.current;
     window.setTimeout(() => complete({
-      crewStatus: 'Suit sealed at 4.3 psi and cleared for flight training.',
+      crewStatus: 'Supplies loaded and strapped down, suit sealed at 4.3 psi, drill passed. Aboard the crew transport to the pad.',
       consequence: `${n === 0
         ? 'You caught the low pressure reading on your first pass, before the suit left the station.'
         : `You misjudged ${n} ${n === 1 ? 'reading' : 'readings'} and checked again. Clearance stayed blocked until the leak was fixed, which is what a preflight check is for.`
-      } In the trainer the same jump lasted ${fmt('earth')} in Earth gravity, ${fmt('mars')} in Mars gravity and ${fmt('moon')} in Moon gravity. Less gravity pulls you back down more slowly.`,
+      } You loaded the food, the tools and the spare battery, then closed the rack and locked both restraints so nothing can shift at launch. In the trainer the same jump lasted ${fmt('earth')} in Earth gravity, ${fmt('mars')} in Mars gravity and ${fmt('moon')} in Moon gravity. Less gravity pulls you back down more slowly. Your Earth jump is the baseline to compare with when you reach the Moon.`,
       objectives: [
+        { label: 'Load food, tools and the spare battery into the rack', done: true },
         { label: 'Inspect every suit item', done: true },
         { label: 'Detect and fix the low pressure reading', done: true },
         { label: 'Carry the pouch through all three gravity lanes', done: true },
+        { label: 'Close the rack and lock both restraints', done: true },
+        { label: 'Board the crew transport', done: true },
       ],
       stats: [
         { label: 'Readings misjudged', value: String(n) },
@@ -397,19 +570,37 @@ export function EarthMission() {
   const onInteract = (id: string) => {
     if (id === 'station') { setPanel(true); return; }
     if (id === 'pouch') { setCarrying(true); playCue('ok'); return; }
-    if (id === 'goal') { playCue('ok'); finish(); }
+    if (id === 'goal') { drillDone(); return; }
+    if (id === 'van') { playCue('complete'); hud.say('Welcome aboard. Next stop, the launch pad.'); finish(); return; }
+    // The supply run and the restraints all go through the cargo rules.
+    const r = id === 'shelf' ? pickUp(cargo) : id === 'rack' ? load(cargo) : id === 'cart' ? secureStep(cargo) : null;
+    if (!r) return;
+    playCue(r.ok ? 'ok' : 'caution');
+    hud.say(r.say);
+    if (!r.ok) return;
+    setCargo(r.state);
+    if (id === 'rack' && allLoaded(r.state)) {
+      playCue('checkpoint');
+      hud.say('All three are in the rack. Now check your suit at the suit station.');
+      setPhase('suit', { flags: { suppliesLoaded: true } });
+    }
+    if (id === 'cart' && secured(r.state)) hud.say('Cargo secured. Board the crew transport when you are ready.');
   };
 
   useEffect(() => {
-    const objective = !cleared ? 'Walk to the suit station and run the preflight check'
-      : delivered ? 'Pouch delivered'
-        : !carrying ? 'Pick up the equipment pouch from the table'
-          : 'Carry the pouch through the gravity lanes to the training point. Jump the red bars.';
+    const objective = phase === 'supplies' ? (cargo.carrying ? `Carry the ${nameOf(cargo.carrying)} to the loading rack` : `Pick up the ${nameOf(supply)} from the supply shelf`)
+      : phase === 'suit' ? 'Walk to the suit station and run the preflight check'
+        : phase === 'board' ? (boarded ? 'Aboard the crew transport' : secured(cargo) ? 'Board the crew transport' : `Secure the cargo: ${secureLabel(cargo).toLowerCase()}`)
+          : !carrying ? 'Pick up the equipment pouch from the table'
+            : 'Carry the pouch through the gravity lanes to the training point. Jump the red bars.';
     hud.set({
       objective, touch: 'walk', touchLabels: { primary: 'Jump', use: 'Use' },
       labels: ['Fictional training procedure', 'Trainer gravity: real Moon and Mars values'],
-      hint: !hints ? null : !cleared ? 'The suit station is on your left. Walk close and press E.'
-        : carrying ? 'Press Space just before each red bar. Watch how long the jump lasts in each lane.' : null,
+      hint: !hints ? null
+        : phase === 'supplies' ? (cargo.carrying ? 'The loading rack is past the shelf, on your right. Walk close and press E.' : 'The supply shelf is on your right. Walk close and press E. You carry one thing at a time.')
+          : phase === 'suit' ? 'The suit station is on your left. Walk close and press E.'
+            : phase === 'board' ? (secured(cargo) ? 'The crew transport is across the road. Walk to its open door and press E.' : 'Stand at the rack and press E for each step: the door, then two restraints.')
+              : carrying ? 'Press Space just before each red bar. Watch how long the jump lasts in each lane.' : null,
       meters: [
         { id: 'pressure', label: 'Suit pressure', value: pressureFixed ? 4.3 : 3.1, max: 4.3, text: pressureFixed ? '4.3 psi' : '3.1 psi', status: pressureFixed ? 'ok' : 'low', note: 'Safe range 4.2 to 4.4 psi' },
         { id: 'oxygen', label: 'Suit oxygen', value: 100, max: 100, text: '100%', status: 'ok' },
@@ -417,11 +608,18 @@ export function EarthMission() {
     });
     if (!pressureFixed && checks.pressure === 'reported') hud.warn({ title: 'SUIT PRESSURE LOW', text: 'Pressure is 3.1 psi. Fix the leak before training.', level: 'alert' });
     else hud.warn(null);
-  }, [cleared, carrying, delivered, hints, pressureFixed, checks.pressure]);
+  }, [phase, cargo, boarded, supply, cleared, carrying, delivered, hints, pressureFixed, checks.pressure]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onStep = (s: WalkerState) => {
     // Record the airtime of each jump against the lane it started in.
-    if (!wasGrounded.current && s.grounded && s.lastAirtime > 0.2) airtimes.current[jumpZone.current] = s.lastAirtime;
+    if (!wasGrounded.current && s.grounded && s.lastAirtime > 0.2) {
+      airtimes.current[jumpZone.current] = s.lastAirtime;
+      // The first Earth jump is the one to remember: every later world is compared with it.
+      if (jumpZone.current === 'earth' && cleared && !baseline.current) {
+        baseline.current = true;
+        hud.say(`${s.lastAirtime.toFixed(2)} seconds in the air. That is your Earth baseline. Remember it for the Moon.`);
+      }
+    }
     if (s.grounded) jumpZone.current = zoneAt(s);
     wasGrounded.current = s.grounded;
     if (tick.current++ % 6 !== 0) return;
@@ -430,7 +628,7 @@ export function EarthMission() {
     const a = airtimes.current;
     hud.set({
       distance: carrying ? Math.hypot(GOAL.x - s.x, GOAL.z - s.z) : null,
-      readouts: cleared ? [
+      readouts: phase === 'supplies' || phase === 'board' ? cargoChecklist(cargo).map((c) => ({ label: c.label, value: c.done ? `✓ ${c.value}` : c.value, status: c.done ? 'ok' as const : 'caution' as const, keep: c.done })) : cleared ? [
         { label: 'Gravity here', value: `${p.label} ${zone === 'earth' ? '1.00' : zone === 'mars' ? '0.38' : '0.17'} g`, note: zone === 'earth' ? '' : 'trainer harness' },
         { label: 'Last jump: Earth', value: a.earth ? `${a.earth.toFixed(2)} s` : 'not yet' },
         { label: 'Last jump: Mars', value: a.mars ? `${a.mars.toFixed(2)} s` : 'not yet' },
@@ -439,18 +637,21 @@ export function EarthMission() {
     });
   };
 
-  const marker = !cleared ? { x: STATION.x, z: STATION.z + 0.6 } : delivered ? null : !carrying ? { x: TABLE.x, z: TABLE.z + 0.6 } : GOAL;
+  const marker = phase === 'supplies' ? (cargo.carrying ? { x: RACK.x - 0.8, z: RACK.z } : { x: SHELF.x, z: SHELF.z - 0.7 })
+    : phase === 'suit' ? { x: STATION.x, z: STATION.z + 0.6 }
+      : phase === 'board' ? (boarded ? null : secured(cargo) ? { x: VAN.x + 0.8, z: VAN.z + 1.9 } : { x: CART.x - 0.5, z: CART.z + 0.9 })
+        : !carrying ? { x: TABLE.x, z: TABLE.z + 0.6 } : GOAL;
 
   return (
     <>
       <GameCanvas fov={52} envIntensity={0.55} background="#cfe2f3">
         <EarthWorld follow={walker} />
-        <Yard cleared={cleared} carrying={carrying} delivered={delivered} />
+        <Yard cleared={cleared} carrying={carrying} delivered={delivered} cargo={cargo} atPad={phase === 'board'} />
         {marker && <ObjectiveMarker x={marker.x} z={marker.z} />}
         <HarnessCable walker={walker} zone={jumpZone} />
         <WalkerRig
           env={env} state={walker} interactables={interactables} onInteract={onInteract} onStep={onStep}
-          carrying={carrying} frozen={panel || delivered}
+          carrying={carrying || !!cargo.carrying} carried={cargo.carrying ? <SupplyItem id={cargo.carrying} /> : undefined} frozen={panel || boarded}
           chestLight={pressureFixed ? 'green' : 'red'} gloveAlert={!pressureFixed}
         />
       </GameCanvas>

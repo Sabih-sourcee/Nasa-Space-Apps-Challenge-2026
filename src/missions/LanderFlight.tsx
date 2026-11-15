@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { playCue } from '../game/audio';
 import { hud } from '../game/hud';
 import { input } from '../game/input';
+import { LANDER_VIEWS, useViews, view } from '../game/view';
 import { probe } from '../game/probe';
 import { useGame } from '../game/store';
 import {
@@ -121,6 +122,8 @@ function Flight({ world, tier, sim, cfg, onEnd }: {
   const shadow = useRef<THREE.Group>(null);
   const plasma = useRef<THREE.Mesh>(null);
   const power = useRef(0);
+  useViews(LANDER_VIEWS);
+  const lastView = useRef(0);
   const { camera } = useThree();
   const reduced = useReducedMotion();
   const settings = useGame((s) => s.save.settings);
@@ -172,10 +175,28 @@ function Flight({ world, tier, sim, cfg, onEnd }: {
     }
 
     // Stable chase camera: fixed direction, pulls back with altitude.
-    const dist = Math.min(95, 24 + s.alt * 0.16);
+    const dist = Math.min(95, 24 + s.alt * 0.16) * view.zoom();
     const want = new THREE.Vector3(s.x, s.alt + 8 + dist * 0.32, s.z + dist);
     const target = new THREE.Vector3(s.x, Math.max(1.5, s.alt - dist * 0.12), s.z);
-    if (reduced || first.current) { camPos.current.copy(want); look.current.copy(target); first.current = false; }
+    const vi = view.index();
+    const windowView = view.is('Window');
+    if (view.is('Side')) {
+      // From the side: height and sink rate are easiest to judge here.
+      want.set(s.x + dist * 1.05, s.alt + 3 + dist * 0.1, s.z + dist * 0.2);
+      target.set(s.x, Math.max(1.5, s.alt - dist * 0.08), s.z);
+    } else if (view.is('Above')) {
+      // Straight down: the craft's shadow shows where it will touch.
+      want.set(s.x, s.alt + 16 + dist * 0.9, s.z + 2);
+      target.set(s.x, 0, s.z);
+    } else if (windowView) {
+      // Out of the pilot's window, looking down at the ground ahead.
+      want.set(s.x, s.alt + 1.2, s.z - 2.6);
+      target.set(s.x, 0, s.z - Math.max(5, s.alt * 0.3));
+    }
+    if (craft.current) craft.current.visible = !windowView;
+    const cut = lastView.current !== vi && (windowView || lastView.current === 3);
+    lastView.current = vi;
+    if (reduced || first.current || cut || windowView) { camPos.current.copy(want); look.current.copy(target); first.current = false; }
     else { const k = 1 - Math.exp(-6 * delta); camPos.current.lerp(want, k); look.current.lerp(target, k); }
     camera.position.copy(camPos.current);
     camera.lookAt(look.current);

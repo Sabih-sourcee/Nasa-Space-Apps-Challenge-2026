@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { hud } from '../game/hud';
 import { input } from '../game/input';
+import { WALK_VIEWS, useViews, view } from '../game/view';
 import { probe } from '../game/probe';
 import { stepWalker, type WalkEnv, type WalkerState } from '../sim/movement';
 import { Astronaut, makeAnim } from './Astronaut';
@@ -51,6 +52,12 @@ export function WalkerRig({ env, state, interactables, onInteract, onStep, carry
   const goal = useRef<{ x: number; z: number; use: string | null } | null>(null);
   const goalRing = useRef<THREE.Mesh>(null);
   const stuck = useRef(0);
+  // Camera views (V). In the helmet view A and D turn and W and S walk, like looking out of the visor.
+  useViews(WALK_VIEWS);
+  const yaw = useRef(state.current.heading);
+  const lastView = useRef(0);
+  const wasAir = useRef(false);
+  const dip = useRef(0);
   const frozenRef = useRef(frozen);
   frozenRef.current = frozen;
   const listRef = useRef(interactables);
@@ -115,15 +122,32 @@ export function WalkerRig({ env, state, interactables, onInteract, onStep, carry
     const use = input.consume('use');
     let moveX = input.axisX();
     let moveZ = -input.axisY();
+    const helmet = view.is('Helmet');
+    const keys = moveX !== 0 || moveZ !== 0;
+    if (helmet && !frozen) {
+      yaw.current -= moveX * 2.4 * dt;
+      const fwd = -moveZ;
+      moveX = Math.sin(yaw.current) * fwd;
+      moveZ = Math.cos(yaw.current) * fwd;
+    }
     // The keyboard always wins: any movement key cancels the mouse target.
-    if (moveX !== 0 || moveZ !== 0 || frozen) goal.current = null;
+    if (keys || frozen) goal.current = null;
     const g = goal.current;
     if (g) {
       const dx = g.x - s.x;
       const dz = g.z - s.z;
       const dist = Math.hypot(dx, dz);
       if (dist < 0.3) goal.current = null;
-      else { moveX = dx / dist; moveZ = dz / dist; }
+      else {
+        moveX = dx / dist; moveZ = dz / dist;
+        if (helmet) {
+          // Walking to a clicked spot turns the visor toward it.
+          let turn = Math.atan2(dx, dz) - yaw.current;
+          while (turn > Math.PI) turn -= Math.PI * 2;
+          while (turn < -Math.PI) turn += Math.PI * 2;
+          yaw.current += turn * Math.min(1, 6 * dt);
+        }
+      }
     }
     const next = frozen
       ? stepWalker(s, { moveX: 0, moveZ: 0, jump: false }, dt, e)
@@ -158,16 +182,43 @@ export function WalkerRig({ env, state, interactables, onInteract, onStep, carry
     }
     anim.current.speed = Math.min(1, Math.hypot(s.vx, s.vz) / e.preset.walkSpeed);
     anim.current.airborne = !s.grounded;
+    // Landing: the knees take the weight, so the body dips for a moment and comes back up.
+    if (wasAir.current && s.grounded) dip.current = 1;
+    wasAir.current = !s.grounded;
+    dip.current = Math.max(0, dip.current - delta * 4.5);
+    if (g) g.scale.y = reduced ? 1 : 1 - 0.1 * Math.sin(dip.current * Math.PI);
     anim.current.carry = carrying;
 
-    target.set(s.x, s.y + lookHeight, s.z);
-    desired.set(s.x + cameraOffset[0], s.y * 0.6 + cameraOffset[1], s.z + cameraOffset[2]);
-    if (reduced || first.current) {
+    const vi = view.index();
+    const zm = view.zoom();
+    const ox = cameraOffset[0] * zm, oy = cameraOffset[1] * zm, oz = cameraOffset[2] * zm;
+    const helmetView = view.is('Helmet');
+    if (helmetView && lastView.current !== vi) yaw.current = s.heading;
+    const cut = lastView.current !== vi && (helmetView || lastView.current === 3);
+    lastView.current = vi;
+    if (g) g.visible = !helmetView;
+    if (helmetView) {
+      // Eyes behind the visor, looking where the astronaut faces.
+      const fx = Math.sin(yaw.current), fz = Math.cos(yaw.current);
+      desired.set(s.x + fx * 0.2, s.y + 1.6, s.z + fz * 0.2);
+      target.set(s.x + fx * 8, s.y + 1.25, s.z + fz * 8);
+    } else if (view.is('Close')) {
+      target.set(s.x, s.y + lookHeight + 0.7, s.z);
+      desired.set(s.x + ox * 0.5, s.y * 0.6 + oy * 0.4 + 0.6, s.z + oz * 0.5);
+    } else if (view.is('Above')) {
+      const reach = Math.hypot(oy, oz);
+      target.set(s.x, s.y, s.z);
+      desired.set(s.x, s.y + reach * 1.35, s.z + reach * 0.16);
+    } else {
+      target.set(s.x, s.y + lookHeight, s.z);
+      desired.set(s.x + ox, s.y * 0.6 + oy, s.z + oz);
+    }
+    if (reduced || first.current || cut) {
       camera.position.copy(desired);
       look.current.copy(target);
       first.current = false;
     } else {
-      const k = 1 - Math.exp(-5 * delta);
+      const k = 1 - Math.exp(-(helmetView ? 16 : 5) * delta);
       camera.position.lerp(desired, k);
       look.current.lerp(target, k);
     }

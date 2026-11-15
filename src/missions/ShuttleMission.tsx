@@ -4,17 +4,19 @@ import * as THREE from 'three';
 import { playCue } from '../game/audio';
 import { hud } from '../game/hud';
 import { input } from '../game/input';
+import { LAUNCH_VIEWS, useViews, view } from '../game/view';
+import { enginePower, separationCall, stackPitch, stackState } from '../sim/launchStack';
 import { probe } from '../game/probe';
 import { useGame } from '../game/store';
 import {
-  ASCENT_GATES, ASCENT_TUNING, ORBIT_SPEED, ascentDeviation, makeAscent, stepAscent, type AscentState,
+  ASCENT_GATES, ASCENT_TUNING, ORBIT_SPEED, ascentDeviation, makeAscentAloft, stepAscent, type AscentState,
 } from '../sim/flight';
 import { hintsOn } from '../sim/save';
 import { rateAscent } from '../sim/score';
 import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight, useReducedMotion, useSim } from '../three/GameCanvas';
-import { LaunchTower, M } from '../three/Props';
+import { LaunchTower, M, ShuttleStack } from '../three/Props';
 import { EarthGlobe, SkyDome, Stars } from '../three/Scenery';
 import { groundTexture, makeScreen } from '../three/textures';
 import { Btn, Keycap } from '../ui/common';
@@ -25,10 +27,11 @@ interface CheckItem { id: string; label: string; done: string; twice?: boolean }
 
 function checklist(tier: Tier): CheckItem[] {
   return [
-    { id: 'hatch', label: 'Close and lock the hatch', done: 'LOCKED' },
-    { id: 'air', label: 'Connect suit air to the ship', done: 'FLOWING' },
+    // The boosters have just gone. These are the checks before the pilot takes the stick.
+    { id: 'boosters', label: 'Confirm both boosters are away', done: 'CONFIRMED' },
+    { id: 'core', label: 'Check the core stage engines', done: 'STEADY' },
     { id: 'guidance', label: 'Align the guidance platform', done: 'ALIGNED', twice: tier !== 'junior' },
-    { id: 'engines', label: 'Arm the main engines', done: 'ARMED' },
+    { id: 'control', label: 'Switch to manual control', done: 'YOURS' },
   ];
 }
 
@@ -262,7 +265,8 @@ function Outside({ sim, tier, phase }: { sim: React.MutableRefObject<AscentState
     const place = (mesh: THREE.Mesh | null, idx: number) => {
       if (!mesh) return;
       const gate = ASCENT_GATES[idx];
-      const show = phase === 'ascent' && gate !== undefined && s.status === 'flying';
+      // The gate rings are a pilot's aid: they belong to the cockpit view.
+      const show = phase === 'ascent' && gate !== undefined && s.status === 'flying' && !view.is('Outside');
       mesh.visible = show;
       if (!show) return;
       const ahead = (gate - p) * 420 + 7;
@@ -294,12 +298,77 @@ function Outside({ sim, tier, phase }: { sim: React.MutableRefObject<AscentState
   );
 }
 
+/**
+ * The outside view: the whole stack seen from beside it. Everything here is
+ * driven by the same flight state as the cockpit, so the boosters and the core
+ * stage leave at the heights the instruments show.
+ */
+function StackView({ sim, cockpit }: { sim: React.MutableRefObject<AscentState>; cockpit: React.RefObject<THREE.Group | null> }) {
+  const root = useRef<THREE.Group>(null);
+  const core = useRef<THREE.Group>(null);
+  const boosterL = useRef<THREE.Group>(null);
+  const boosterR = useRef<THREE.Group>(null);
+  const boosterPower = useRef(0);
+  const corePower = useRef(0);
+  const orbiterPower = useRef(0);
+  // Seconds since each part let go. Visual only: the flight state decides when.
+  const sinceBoosters = useRef(0);
+  const sinceCore = useRef(0);
+  const reduced = useReducedMotion();
+
+  useFrame((_, delta) => {
+    const s = sim.current;
+    const d = Math.min(delta, 0.1);
+    const outside = view.is('Outside');
+    if (root.current) root.current.visible = outside;
+    if (cockpit.current) cockpit.current.visible = !outside;
+    const st = stackState(s.altitude);
+    sinceBoosters.current = st.boostersAway ? sinceBoosters.current + d : 0;
+    sinceCore.current = st.coreAway ? sinceCore.current + d : 0;
+    const [pb, pc, po] = enginePower(s.altitude, s.status === 'flying' ? s.throttle : 0);
+    const ease = 1 - Math.exp(-10 * d);
+    boosterPower.current += (pb - boosterPower.current) * ease;
+    corePower.current += (pc - corePower.current) * ease;
+    orbiterPower.current += (po - orbiterPower.current) * ease;
+    // Lean over toward the horizon as the climb goes on.
+    if (root.current) root.current.rotation.x = -stackPitch(s.altitude);
+    const tb = reduced ? Math.min(sinceBoosters.current, 0.01) * 400 : sinceBoosters.current;
+    [boosterL.current, boosterR.current].forEach((b, i) => {
+      if (!b) return;
+      const side = i === 0 ? -1 : 1;
+      // Pushed sideways off their struts, then left behind and tumbling slowly.
+      b.position.set(side * (1.6 * tb + 0.5 * tb * tb), -(1.2 * tb + 4.5 * tb * tb), 0.6 * tb);
+      b.rotation.z = side * -0.1 * tb;
+      b.visible = tb < 7;
+    });
+    const tc = reduced ? Math.min(sinceCore.current, 0.01) * 400 : sinceCore.current;
+    if (core.current) {
+      core.current.position.set(0, -(2.5 * tc + 2.2 * tc * tc), 0);
+      core.current.rotation.x = 0.025 * tc;
+      core.current.visible = tc < 9;
+    }
+  });
+
+  return (
+    <group ref={root} visible={false}>
+      {/* The cockpit sits in the orbiter's nose, so the stack hangs below the origin. */}
+      <group position={[0, -46, 0]}>
+        <ShuttleStack parts={{ core, boosterL, boosterR, boosterPower, corePower, orbiterPower }} />
+      </group>
+    </group>
+  );
+}
+
 function FlightLoop({ sim, tier, phase, countdown, armed, onLiftoff, onEnd }: {
   sim: React.MutableRefObject<AscentState>; tier: Tier; phase: string; countdown: React.MutableRefObject<number>;
   armed: boolean; onLiftoff: () => void; onEnd: (s: AscentState) => void;
 }) {
   const { camera } = useThree();
   const reduced = useReducedMotion();
+  useViews(LAUNCH_VIEWS);
+  const camAt = useRef(new THREE.Vector3(30, -30, 62));
+  const camLook = useRef(new THREE.Vector3(0, -24, 0));
+  const wasOutside = useRef(false);
   const ended = useRef(false);
   const tick = useRef(0);
   const lifted = useRef(false);
@@ -324,13 +393,32 @@ function FlightLoop({ sim, tier, phase, countdown, armed, onLiftoff, onEnd }: {
     const next = stepAscent(prev, { steerX: input.axisX(), steerY: input.axisY(), thrust: input.held('primary'), brake: input.held('brake') }, dt, tier);
     if (next.gatesHit > prev.gatesHit) playCue('ok');
     if (next.gatesMissed > prev.gatesMissed) playCue('caution');
+    // Mission Control calls each separation as the vehicle passes its height.
+    const call = separationCall(prev.altitude, next.altitude);
+    if (call) { hud.say(call); playCue('checkpoint'); }
     sim.current = next;
-  }, (_, elapsed) => {
+  }, (delta, elapsed) => {
     const s = sim.current;
     // Seated pilot's-eye view. Launch vibration is skipped with reduced motion.
     const shake = reduced || s.status !== 'flying' ? 0 : s.throttle * Math.max(0, 1 - s.altitude / 60) * 0.012;
-    camera.position.set(-0.42 + Math.sin(elapsed * 47) * shake, 1.52 + Math.sin(elapsed * 61) * shake, 1.8);
-    camera.lookAt(0.2, 1.4, -3);
+    if (view.is('Outside')) {
+      // Wide on the whole stack at first, then close on the orbiter once it is flying alone.
+      const alone = stackState(s.altitude).coreAway;
+      const want = alone ? new THREE.Vector3(20, -2, 30) : new THREE.Vector3(34, -30, 66);
+      const look = alone ? new THREE.Vector3(0, -6, 0) : new THREE.Vector3(0, -24, 0);
+      want.sub(look).multiplyScalar(view.zoom()).add(look);
+      if (reduced || !wasOutside.current) { camAt.current.copy(want); camLook.current.copy(look); }
+      else { const k = 1 - Math.exp(-1.6 * delta); camAt.current.lerp(want, k); camLook.current.lerp(look, k); }
+      wasOutside.current = true;
+      camera.position.set(camAt.current.x + Math.sin(elapsed * 31) * shake * 6, camAt.current.y + Math.sin(elapsed * 43) * shake * 6, camAt.current.z);
+      camera.lookAt(camLook.current);
+    } else {
+      wasOutside.current = false;
+      // Set back behind the seat so the windows and the whole panel are in view. Zoom moves it along the cabin.
+      const back = 2.55 + (view.zoom() - 1) * 1.3;
+      camera.position.set(-0.3 + Math.sin(elapsed * 47) * shake, 1.66 + Math.sin(elapsed * 61) * shake, back);
+      camera.lookAt(0.1, 1.42, -3);
+    }
 
     if (tick.current++ % 6 !== 0 || phase !== 'ascent') return;
     const d = ascentDeviation(s);
@@ -338,7 +426,7 @@ function FlightLoop({ sim, tier, phase, countdown, armed, onLiftoff, onEnd }: {
     const fuelPct = (s.fuel / tune.fuel) * 100;
     const inBand = s.speed >= tune.band[0] && s.speed <= tune.band[1];
     hud.set({
-      crosshair: s.status === 'flying',
+      crosshair: s.status === 'flying' && !view.is('Outside'),
       meters: [
         { id: 'throttle', label: 'Throttle', value: s.throttle, max: 1, text: `${Math.round(s.throttle * 100)}%`, status: 'ok' },
         { id: 'fuel', label: 'Fuel', value: fuelPct, max: 100, text: `${Math.round(fuelPct)}%`, status: fuelPct < 15 ? 'low' : fuelPct < 30 ? 'caution' : 'ok' },
@@ -346,10 +434,12 @@ function FlightLoop({ sim, tier, phase, countdown, armed, onLiftoff, onEnd }: {
       readouts: [
         { label: 'Speed', value: `${s.speed.toFixed(2)} km/s`, note: `orbit needs ${tune.band[0].toFixed(2)} to ${tune.band[1].toFixed(2)}`, status: inBand ? 'ok' : s.speed > tune.band[1] ? 'caution' : 'ok' },
         { label: 'Altitude', value: `${Math.round(s.altitude)} km` },
+        { label: 'Still flying', value: stackState(s.altitude).label },
         { label: 'Course', value: on ? 'ON COURSE' : 'OFF COURSE', status: on ? 'ok' : 'caution', note: `${d.toFixed(1)} off centre, gate allows ${tune.gateTol.toFixed(1)}` },
         { label: 'Gates', value: `${s.gatesHit} hit, ${s.gatesMissed} missed`, note: `${tune.missesAllowed} misses allowed`, status: s.gatesMissed >= tune.missesAllowed ? 'caution' : 'ok' },
       ],
       hint: !hints || s.status !== 'flying' ? null
+        : view.is('Outside') ? 'Outside view. Press V to go back to the cockpit and steer through the gates.'
         : s.throttle < 0.05 && s.speed < 0.1 ? 'Hold Space to push the throttle up. Lift off!'
           : inBand && s.throttle > 0 ? 'Orbital speed! Hold X to cut the engines.'
             : s.speed > tune.band[1] ? 'Too fast. Keep holding X to brake back into the green band.'
@@ -391,7 +481,8 @@ export function ShuttleMission() {
   const items = useMemo(() => checklist(tier), [tier]);
   const phase = run.phase;
 
-  const sim = useRef(makeAscent(tier));
+  const sim = useRef(makeAscentAloft(tier));
+  const cockpit = useRef<THREE.Group>(null);
   const countdown = useRef(COUNTDOWN);
   const [done, setDone] = useState(phase === 'ascent' ? items.length : 0);
   const [realign, setRealign] = useState(false);
@@ -408,7 +499,7 @@ export function ShuttleMission() {
     if (item.twice && !realign) {
       setRealign(true);
       playCue('caution');
-      hud.warn({ title: 'GUIDANCE NOT ALIGNED', text: 'The platform drifted 2 degrees. Hold the launch and align it again.', level: 'caution' });
+      hud.warn({ title: 'GUIDANCE NOT ALIGNED', text: 'The platform drifted 2 degrees. Stay on autopilot and align it again.', level: 'caution' });
       return;
     }
     hud.warn(null);
@@ -466,7 +557,7 @@ export function ShuttleMission() {
           : `A guidance fault pushed the shuttle sideways about a third of the way up. ${s.gatesMissed} ${s.gatesMissed === 1 ? 'gate was' : 'gates were'} passed off course before you steered back, inside the ${tune.missesAllowed} this tier allows.`
         } Cutting the engines at orbital speed left the shuttle falling around Earth instead of back to it.${attempts.current > 1 ? ` It took ${attempts.current} attempts: each training reset put you back at liftoff.` : ''}`,
         objectives: [
-          { label: 'Complete the launch checklist', done: true },
+          { label: 'Complete the climb checklist', done: true },
           { label: 'Steer through the guidance gates', done: true },
           { label: 'Correct the guidance deviation', done: true },
           { label: 'Cut the engines at orbital speed', done: true },
@@ -489,17 +580,18 @@ export function ShuttleMission() {
     <>
       <GameCanvas fov={62} far={20000} envIntensity={0.3} background="#cfe2f3">
         <Outside sim={sim} tier={tier} phase={phase} />
-        <Cockpit sim={sim} tier={tier} phase={phase} done={done} total={items.length} countdown={countdown} />
+        <group ref={cockpit}><Cockpit sim={sim} tier={tier} phase={phase} done={done} total={items.length} countdown={countdown} /></group>
+        <StackView sim={sim} cockpit={cockpit} />
         <FlightLoop
           sim={sim} tier={tier} phase={phase} countdown={countdown} armed={armed}
-          onLiftoff={() => { hud.say('Liftoff checkpoint. Hold Space to throttle up.'); setPhase('ascent', { stats: { ascentAttempts: attempts.current - 1 } }); }}
+          onLiftoff={() => { hud.say('You have control. Hold Space to keep the engines burning.'); setPhase('ascent', { stats: { ascentAttempts: attempts.current - 1 } }); }}
           onEnd={onEnd}
         />
       </GameCanvas>
 
       {phase === 'checklist' && (
-        <div className="side-panel" aria-label="Launch checklist">
-          <h3><Icon name="list" size={16} /> Launch checklist · {Math.min(done, items.length)} of {items.length}</h3>
+        <div className="side-panel" aria-label="Climb checklist">
+          <h3><Icon name="list" size={16} /> Climb checklist · {Math.min(done, items.length)} of {items.length}</h3>
           <ol>
             {items.map((it, i) => (
               <li key={it.id} className={i < done ? 'done' : i === done ? 'current' : ''}>
@@ -514,8 +606,8 @@ export function ShuttleMission() {
       )}
       {phase === 'checklist' && (
         <div className="big-readout" aria-live="off">
-          {armed ? `T-MINUS 00:${Math.ceil(count).toString().padStart(2, '0')}` : 'LAUNCH HOLD'}
-          <small>{armed ? 'COMPRESSED COUNTDOWN' : 'CHECKLIST IN PROGRESS'}</small>
+          {armed ? `MANUAL IN 00:${Math.ceil(count).toString().padStart(2, '0')}` : 'AUTOPILOT HOLDING'}
+          <small>{armed ? 'AUTOPILOT HANDS OVER' : 'CHECKLIST IN PROGRESS'}</small>
         </div>
       )}
 
@@ -524,11 +616,11 @@ export function ShuttleMission() {
           title="Training reset"
           reason={RESET_TEXT[reset]?.reason ?? 'The attempt ended.'}
           tip={RESET_TEXT[reset]?.tip ?? 'Try again.'}
-          retryLabel="Back to the liftoff checkpoint"
+          retryLabel="Back to booster separation"
           onRetry={() => {
             attempts.current += 1;
             bumpStat('ascentAttempts');
-            sim.current = makeAscent(tier);
+            sim.current = makeAscentAloft(tier);
             setReset(null);
           }}
         />

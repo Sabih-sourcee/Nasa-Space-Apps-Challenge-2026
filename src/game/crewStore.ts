@@ -3,6 +3,7 @@
 // engine and is the authority: this store only sends actions and shows the
 // snapshot it gets back.
 
+import { localCall } from './crewLocal';
 import { create } from 'zustand';
 import { botTurn, cadetName, createSession, reduceCrew, type CrewAction, type CrewSession, type Member } from '../sim/crew';
 import type { CrewCarry, RoomId } from '../sim/crewData';
@@ -40,10 +41,28 @@ const aid = () => `${Date.now().toString(36)}-${(counter++).toString(36)}-${Math
 /** Where this cadet is standing. The ship scene writes it, the poll sends it. */
 export const crewPos: { x: number; z: number; room: RoomId } = { x: 0, z: 0, room: 'galley' };
 
+/**
+ * Where crew requests go. The game's own server is tried first. If this copy of
+ * the game has no server behind it (a plain static copy), crews are held in the
+ * host's browser window instead, which other windows on the same computer can join.
+ */
+let transport: 'unknown' | 'service' | 'local' = 'unknown';
+export const crewTransport = (): 'unknown' | 'service' | 'local' => transport;
+
 async function call(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const res = await fetch('/api/crew', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const text = await res.text();
-  try { return JSON.parse(text) as Record<string, unknown>; } catch { return { ok: false, error: 'The mission service is not running. Start the game with "npm run dev" to play with a crew, or use Solo Training.' }; }
+  if (transport !== 'local') {
+    try {
+      const res = await fetch('/api/crew', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const reply = JSON.parse(await res.text()) as Record<string, unknown>;
+      transport = 'service';
+      return reply;
+    } catch {
+      // A crew that was on the server cannot carry on in this window: say so and stop.
+      if (transport === 'service') return { ok: false, error: 'The mission service stopped answering. Check that the game server is still running.' };
+      transport = 'local';
+    }
+  }
+  return localCall(body);
 }
 
 function remember(code: string, token: string, memberId: string): void {
@@ -78,8 +97,8 @@ export const useCrew = create<CrewStore>((set, get) => {
   return {
     mode: 'none', session: null, memberId: null, token: null, busy: false, say: null, error: null, offline: false,
 
-    host: async (carry) => { set({ busy: true, error: null }); enter(await call({ op: 'host', carry }).catch(() => ({ ok: false, error: 'The mission service is not running. Use Solo Training, or start the game with "npm run dev".' }))); },
-    join: async (code) => { set({ busy: true, error: null }); enter(await call({ op: 'join', code }).catch(() => ({ ok: false, error: 'The mission service is not running.' }))); },
+    host: async (carry) => { set({ busy: true, error: null }); enter(await call({ op: 'host', carry }).catch(() => ({ ok: false, error: 'The crew could not be started. Try again, or use Solo Training.' }))); },
+    join: async (code) => { set({ busy: true, error: null }); enter(await call({ op: 'join', code }).catch(() => ({ ok: false, error: 'The crew could not be reached. Check the code and try again.' }))); },
 
     solo: (carry) => {
       stopPolling();

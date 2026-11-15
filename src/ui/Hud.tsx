@@ -8,6 +8,27 @@ import { DEMO_MISSIONS, WORLD_INFO } from '../sim/missions';
 import { COMMANDER } from '../sim/story';
 import { Bar, Btn, Comm, ControlList, Dialog, IconBtn, KeyHint, Keycap, SourceLink, STATUS_WORD, Tile, dialogOpen, withKeys } from './common';
 import { Icon, meterIcon } from './icons';
+import { useView, view } from '../game/view';
+
+/** Shows the camera view in use and steps to the next one. V does the same. */
+export function ViewButton() {
+  const names = useView((v) => v.names);
+  const index = useView((v) => v.index);
+  if (names.length < 2) return null;
+  return (
+    <button type="button" className="view-btn" title="Change the camera view (V)" aria-label={`Camera view: ${names[index]}. Press to change. Shortcut V.`}
+      onClick={(e) => { view.next(); e.currentTarget.blur(); }}>
+      <Icon name="eye" size={18} /><span>{names[index]}</span><kbd className="key">V</kbd>
+    </button>
+  );
+}
+
+/** The dark rim of the helmet, drawn over the scene in the helmet view. */
+export function Visor() {
+  const on = useView((v) => v.names[v.index] === 'Helmet');
+  return on ? <div className="visor" aria-hidden="true" /> : null;
+}
+
 
 function TouchButton({ action, label, className = '', children }: { action: Action; label: string; className?: string; children?: React.ReactNode }) {
   const down = (e: React.PointerEvent) => {
@@ -66,6 +87,7 @@ function KeyLegend({ layout, labels }: { layout: HudState['touch']; labels: HudS
   const moveKeys = layout === 'drift' && !labels.move ? ['A', 'D'] : ['W', 'A', 'S', 'D'];
   const move = labels.move ?? (layout === 'walk' ? 'Move' : layout === 'flight' ? 'Steer' : 'Aim');
   const sameKey = labels.use === labels.primary;
+  const views = useView((v) => v.names.length);
   return (
     <div className="hud-keys" aria-label="Controls">
       <KeyHint keys={moveKeys} label={move} />
@@ -73,6 +95,8 @@ function KeyLegend({ layout, labels }: { layout: HudState['touch']; labels: HudS
       {labels.brake && <KeyHint keys={['X']} label={labels.brake} />}
       {(layout !== 'flight' || labels.use !== 'Use') && <KeyHint keys={['E']} label={labels.use} />}
       {labels.recover && <KeyHint keys={['R']} label={plainLabel(labels.recover)} />}
+      {views > 1 && <KeyHint keys={['V']} label="View" />}
+      {views > 1 && <KeyHint keys={['-', '+']} label="Zoom" />}
       {layout === 'walk' && <span className="key-hint mouse-hint"><Icon name="hand" size={16} /><span className="key-what">Click the ground to walk</span></span>}
     </div>
   );
@@ -168,7 +192,7 @@ export function Hud() {
   const phaseIndex = def.phases.findIndex((p) => p.id === run.phase);
   const phase = def.phases[phaseIndex];
   // Readouts that need attention are always shown. The rest wait behind the info button.
-  const urgent = h.readouts.filter((r) => r.status === 'caution' || r.status === 'low');
+  const urgent = h.readouts.filter((r) => r.status === 'caution' || r.status === 'low' || r.keep);
   const readouts = prefs.details ? h.readouts : urgent;
   const warningText = h.warning ? `${h.warning.title}. ${h.warning.text}` : null;
   const caption = captions && h.caption && !captionGone && h.caption !== warningText ? h.caption : null;
@@ -178,6 +202,7 @@ export function Hud() {
 
   return (
     <div className="hud">
+      <Visor />
       <div className="hud-top">
         <div className="hud-left">
           <section className="hud-objective">
@@ -214,6 +239,7 @@ export function Hud() {
         <section className="hud-right">
           {/* After a mouse or touch press the button gives focus back, so Space and E keep driving the game. */}
           <div className="hud-buttons" onClick={(e) => { if (e.detail > 0) (document.activeElement as HTMLElement | null)?.blur(); }}>
+            <ViewButton />
             <IconBtn icon={audio ? 'sound' : 'mute'} label={audio ? 'Sound on. Press to mute' : 'Sound off. Press to turn on'} pressed={audio} onClick={() => update({ audio: !audio })} />
             {h.touch !== 'none' && (
               <IconBtn icon="gamepad" label={prefs.buttons ? 'Hide the on-screen buttons' : 'Show on-screen buttons'} pressed={prefs.buttons} onClick={() => useHudPrefs.setState({ buttons: !prefs.buttons })} />
@@ -244,7 +270,7 @@ export function Hud() {
           {(readouts.length > 0 || (prefs.details && h.labels.length > 0)) && (
             <div className="readouts">
               {readouts.map((r) => (
-                <div key={r.label} className={`readout ${r.status ?? 'ok'}`}>
+                <div key={r.label} className={`readout ${r.status ?? 'ok'}${r.keep ? ' ticked' : ''}`}>
                   <span className="readout-label">{r.label}</span>
                   <span className="readout-value">{r.value}</span>
                   {r.note && <span className="readout-note">{r.note}</span>}

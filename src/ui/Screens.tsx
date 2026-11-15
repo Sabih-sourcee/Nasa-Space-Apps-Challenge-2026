@@ -106,13 +106,11 @@ export function Home() {
           <p className="home-next">{play.note}</p>
           <div className="tile-row">
             <Tile icon="map" label="Missions" note={`${done} of ${PLAYABLE.length} done`} onClick={() => go('atlas')} />
+            <Tile icon="flask" label="Gravity Lab" note="Test five worlds" onClick={() => go('gravity')} />
             <Tile icon="gear" label="Settings" note="Sound and comfort" onClick={() => openSettings(true)} />
             <Tile icon="book" label="Science" note="What is real" onClick={() => go('credits')} />
           </div>
-          <div className="home-row">
-            <Btn kind="blue" size="lg" block icon="crew" onClick={() => go('crew')}>Crew Ship</Btn>
-            <Btn kind="blue" size="lg" block icon="flask" onClick={() => go('gravity')}>Gravity Lab</Btn>
-          </div>
+          <Btn kind="blue" size="lg" block icon="crew" onClick={() => go('crew')}>Crew Ship · play together</Btn>
           <TierPicker compact />
         </nav>
       </div>

@@ -28,7 +28,7 @@ export function SkyDome({ top, horizon, radius = 1100, tint }: { top: string; ho
   return <mesh ref={mesh} material={mat} renderOrder={-10}><sphereGeometry args={[radius, 32, 16]} /></mesh>;
 }
 
-export function Stars({ count = 1600, radius = 1000, opacity }: { count?: number; radius?: number; opacity?: React.MutableRefObject<number> }) {
+export function Stars({ count = 2600, radius = 1000, opacity }: { count?: number; radius?: number; opacity?: React.MutableRefObject<number> }) {
   const geom = useMemo(() => {
     const r = rng(404);
     const pos = new Float32Array(count * 3);
@@ -58,6 +58,40 @@ export function Stars({ count = 1600, radius = 1000, opacity }: { count?: number
 }
 
 /** Painted Earth with a thin blue atmosphere rim. Lit by the scene's Sun, so its phase is right. */
+function sunGlow(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d') as CanvasRenderingContext2D;
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.08, 'rgba(255,250,235,1)');
+  g.addColorStop(0.16, 'rgba(255,236,190,0.55)');
+  g.addColorStop(0.45, 'rgba(255,220,160,0.12)');
+  g.addColorStop(1, 'rgba(255,220,160,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/**
+ * The Sun as seen from space: a small hard disc with a soft glow. It sits a long
+ * way off in the same direction the scene's sunlight comes from, and keeps its
+ * place in the sky as the camera moves.
+ */
+export function SunDisc({ direction, size = 150 }: { direction: [number, number, number]; size?: number }) {
+  const ref = useRef<THREE.Sprite>(null);
+  const tex = useMemo(() => sunGlow(), []);
+  const dir = useMemo(() => new THREE.Vector3(...direction).normalize().multiplyScalar(900), [direction[0], direction[1], direction[2]]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFrame(({ camera }) => { ref.current?.position.copy(camera.position).add(dir); });
+  return (
+    <sprite ref={ref} scale={[size, size, 1]}>
+      <spriteMaterial map={tex} transparent depthWrite={false} depthTest={true} blending={THREE.AdditiveBlending} fog={false} />
+    </sprite>
+  );
+}
+
 /** `below` is for a planet seen from orbit, under the camera: it turns the globe so warm latitudes face up, not the pole. */
 export function EarthGlobe({ position, radius, spin = 0.01, below = false }: { position: [number, number, number]; radius: number; spin?: number; below?: boolean }) {
   const maps = useMemo(() => earthMaps(), []);
