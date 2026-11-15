@@ -5,7 +5,7 @@ import { hud } from '../game/hud';
 import { useGame } from '../game/store';
 import { GameCanvas, SunLight, simClock, useReducedMotion } from '../three/GameCanvas';
 import { Habitat, MarsLander, Pouch, Rover, SolarArray } from '../three/Props';
-import { RealAsset } from '../three/models';
+import { RealAsset, RealRocks } from '../three/models';
 import { Rocks, SkyDome, Terrain } from '../three/Scenery';
 import { makeHeight, scatterRocks } from '../three/terrain';
 import { ResetCard } from '../ui/Hud';
@@ -117,7 +117,7 @@ function MarsEva() {
         <DustStorm level={storm} tier={run.tier} />
         <StormClock on={stormOn} level={storm} solar={solar} />
         <Terrain height={height} kind="mars" size={320} segments={170} repeat={46} />
-        <Rocks rocks={rocks} color="#7c452c" />
+        <RealRocks world="mars" rocks={rocks} fallback={<Rocks rocks={rocks} color="#7c452c" />} />
         <group position={[LANDER.x, height(LANDER.x, LANDER.z), LANDER.z]} rotation={[0, -0.4, 0]}><MarsLander /></group>
         <group position={[ROVER.x, height(ROVER.x, ROVER.z), ROVER.z]} rotation={[0, 0.5, 0]}>
           <RealAsset

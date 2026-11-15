@@ -11,6 +11,7 @@ import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight } from '../three/GameCanvas';
 import { LaunchTower, M, Pouch, ShuttleStack, Sign, Strut } from '../three/Props';
+import { RealAsset } from '../three/models';
 import { ObjectiveMarker, SkyDome } from '../three/Scenery';
 import { groundTexture } from '../three/textures';
 import { WalkerRig, type Interactable } from '../three/WalkerRig';
@@ -46,8 +47,8 @@ export function EarthWorld({ follow }: { follow?: React.MutableRefObject<{ x: nu
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[40, 0.01, -120]} material={concrete} receiveShadow><planeGeometry args={[26, 120]} /></mesh>
       <group position={[40, 0, -190]}>
         <mesh position={[0, 1.5, 0]} material={m.darkSteel} receiveShadow castShadow><boxGeometry args={[30, 3, 30]} /></mesh>
-        <group position={[0, 3, 0]}><ShuttleStack /></group>
-        <group position={[-11, 3, 0]}><LaunchTower /></group>
+        <group position={[0, 3, 0]}><RealAsset kind="shuttle" fallback={<ShuttleStack />} /></group>
+        <group position={[-16, 3, 0]}><RealAsset kind="ml" fallback={<group position={[5, 0, 0]}><LaunchTower /></group>} /></group>
       </group>
       {/* Assembly building and hangars on the horizon */}
       <mesh position={[-150, 40, -330]} material={m.white}><boxGeometry args={[90, 80, 70]} /></mesh>
