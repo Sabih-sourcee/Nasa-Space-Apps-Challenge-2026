@@ -8,7 +8,7 @@ import type { RockSpec } from './terrain';
 // rocks (Poly Haven), Draco-compressed GLBs. Each one replaces a code-drawn prop once
 // it has loaded; the painted prop stays if the file cannot be read.
 
-export type NasaModel = 'lm' | 'perseverance' | 'shuttle' | 'iss' | 'ml' | 'sev' | 'hdu';
+export type NasaModel = 'lm' | 'perseverance' | 'shuttle' | 'iss' | 'ml' | 'sev' | 'hdu' | 'insight';
 
 interface ModelConfig {
   file: string;
@@ -59,6 +59,8 @@ const CONFIG: Record<NasaModel, ModelConfig> = {
   sev: { file: 'sev', by: 'width', size: 3.4 },
   // Habitat Demonstration Unit, NASA 3D Resources (NASA logos and flags removed, keeping hatches and labels).
   hdu: { file: 'hdu', by: 'width', size: 6.8 },
+  // InSight Mars lander with solar panels and arm deployed, NASA 3D Resources / JPL.
+  insight: { file: 'insight', by: 'width', size: 6.0 },
 };
 
 let gltf: GLTFLoader | null = null;

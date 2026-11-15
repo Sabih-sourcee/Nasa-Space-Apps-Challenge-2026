@@ -15,7 +15,7 @@ import type { Tier } from '../sim/types';
 import { SunLight, useReducedMotion, useSim } from '../three/GameCanvas';
 import { LunarLander, MarsLander, Parachute, Sign, Strut } from '../three/Props';
 import { siteHeight, useLandingSite } from '../three/landingSite';
-import { RealRocks } from '../three/models';
+import { RealAsset, RealRocks } from '../three/models';
 import { BlobShadow, EarthGlobe, Rocks, SkyDome, Stars, Terrain, type GroundPhoto } from '../three/Scenery';
 import { makeHeight, scatterRocks } from '../three/terrain';
 import { ResetCard } from '../ui/Hud';
@@ -113,6 +113,9 @@ function World({ world, storm }: { world: LanderWorld; storm?: boolean }) {
       <SunLight direction={[0.5, 0.6, 0.45]} intensity={2.7} color="#ffe0bd" size={60} />
       <Terrain height={height} kind="mars" size={site ? 3200 : 2400} segments={site ? 256 : 200} repeat={140} photo={photo} />
       <RealRocks world="mars" rocks={rocks} fallback={<Rocks rocks={rocks} color="#7c452c" />} />
+      <group position={[14, height(14, -16), -16]} rotation={[0, -0.6, 0]}>
+        <RealAsset kind="insight" fallback={null} />
+      </group>
     </>
   );
 }
