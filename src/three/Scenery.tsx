@@ -119,8 +119,14 @@ export function EarthGlobe({ position, radius, spin = 0.01, below = false }: { p
   );
 }
 
-export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40, color = '#ffffff' }: {
-  height: HeightFn; kind: GroundKind; size?: number; segments?: number; repeat?: number; color?: string;
+/**
+ * A real site photo laid over the whole ground (it does not repeat); the tiled ground
+ * texture then only adds fine detail. Tile coordinates as in `landingSite.ts`.
+ */
+export interface GroundPhoto { map: THREE.Texture; tile: number; u: number; v: number; detailMean: number }
+
+export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40, color = '#ffffff', photo }: {
+  height: HeightFn; kind: GroundKind; size?: number; segments?: number; repeat?: number; color?: string; photo?: GroundPhoto;
 }) {
   // The Moon and Mars ground use real NASA surface imagery; it replaces the painted
   // texture once it has loaded, and the painted one stays if the file cannot be read.
@@ -151,15 +157,26 @@ export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40,
     const bump = (real?.rough ?? (own ? groundRelief(kind) : grainTexture())).clone();
     bump.needsUpdate = true;
     bump.repeat.set(own ? repeat : repeat * 2, own ? repeat : repeat * 2);
-    const m = new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: own ? 2.4 : 1.2, roughness: 0.97, metalness: 0, color, vertexColors: true });
+    const m = new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: own ? 2.4 : 1.2, roughness: 0.97, metalness: 0, color: photo ? '#ffffff' : color, vertexColors: !photo });
     if (own) {
       // Seen from above, a repeated texture shows as a grid. Each sample is mixed with a second one
       // that is larger and turned, so the two never line up and the repeat is hidden.
       const second = 'mat2(0.829, -0.559, 0.559, 0.829) * UV * 0.29 + vec2(0.37, 0.11)';
+      // With a site photo, the detail texture only modulates brightness around its own mean.
+      const tint = photo ? `
+            vec2 pUv = vMapUv / ${repeat.toFixed(1)};
+            vec2 tileUv = vec2(${photo.u.toFixed(5)} + (pUv.x - 0.5) * ${(size / photo.tile).toFixed(5)}, ${photo.v.toFixed(5)} + (0.5 - pUv.y) * ${(size / photo.tile).toFixed(5)});
+            float dl = dot(detail.rgb, vec3(0.299, 0.587, 0.114)) / ${photo.detailMean.toFixed(4)};
+            diffuseColor.rgb *= texture2D(sitePhoto, vec2(tileUv.x, 1.0 - tileUv.y)).rgb * mix(1.0, dl, 0.5);`
+        : 'diffuseColor *= detail;';
       m.onBeforeCompile = (shader) => {
+        if (photo) shader.uniforms.sitePhoto = { value: photo.map };
         shader.fragmentShader = shader.fragmentShader
+          .replace('#include <map_pars_fragment>', `#include <map_pars_fragment>
+            ${photo ? 'uniform sampler2D sitePhoto;' : ''}`)
           .replace('#include <map_fragment>', `#ifdef USE_MAP
-            diffuseColor *= mix(texture2D(map, vMapUv), texture2D(map, ${second.replace('UV', 'vMapUv')}), 0.45);
+            vec4 detail = mix(texture2D(map, vMapUv), texture2D(map, ${second.replace('UV', 'vMapUv')}), 0.45);
+            ${tint}
           #endif`)
           .replace('#include <bumpmap_pars_fragment>', THREE.ShaderChunk.bumpmap_pars_fragment
             .replace(/texture2D\(\s*bumpMap\s*,/g, 'bumpMix(')
@@ -167,8 +184,10 @@ export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40,
               vec4 bumpMix(vec2 uv) { return mix(texture2D(bumpMap, uv), texture2D(bumpMap, ${second.replace('UV', 'uv')}), 0.45); }`));
       };
     }
+    // Shader programs are cached by this key; the photo changes the generated code.
+    if (photo) m.customProgramCacheKey = () => `site-${photo.u}-${photo.v}-${photo.tile}-${size}-${repeat}`;
     return m;
-  }, [kind, repeat, color, real]);
+  }, [kind, repeat, color, real, photo, size]);
   return <mesh geometry={geom} material={mat} receiveShadow />;
 }
 
