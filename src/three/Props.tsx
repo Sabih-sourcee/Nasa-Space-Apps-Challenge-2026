@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useReducedMotion } from './GameCanvas';
+import { RealAsset } from './models';
 import { foilTexture, grainTexture, insigniaTexture, labelTexture, panelTexture, solarCellTexture } from './textures';
 
 // Shared materials. Created once and reused by every prop.
@@ -210,8 +211,10 @@ export function Habitat({ tint = 'moon', beacon = false }: { tint?: 'moon' | 'ma
         <meshStandardMaterial ref={lamp} color="#fff4d6" emissive={beacon ? '#ffb020' : '#fff4d6'} emissiveIntensity={1} />
       </mesh>
       <Sign lines={['HABITAT AIRLOCK']} position={[0, 2.9, 0.13]} size={[1.5, 0.36]} />
-      {/* Dome module and mast */}
-      <mesh position={[-8.6, 0, -6]} material={body} castShadow><sphereGeometry args={[3.2, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>
+      {/* Dome module and mast. The dome is the real NASA Habitat Demonstration Unit model once it loads. */}
+      <group position={[-8.6, 0, -6]}>
+        <RealAsset kind="hdu" fallback={<mesh material={body} castShadow><sphereGeometry args={[3.2, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>} />
+      </group>
       <Strut a={[7.2, 0, -7]} b={[7.2, 8.5, -7]} r={0.07} />
       <mesh position={[7.2, 8.2, -6.6]} rotation={[1.0, 0, 0]} material={m.white}><sphereGeometry args={[0.8, 16, 8, 0, Math.PI * 2, 0, 0.9]} /></mesh>
     </group>
@@ -419,6 +422,21 @@ export function LaunchTower({ height = 52 }: { height?: number }) {
   );
 }
 
+/** Docking collar, target cross and status ring. Kept separate so the real ISS model can wear them. */
+export function DockingPort({ portColor = '#35e07a' }: { portColor?: string }) {
+  const m = M();
+  return (
+    <group>
+      <mesh position={[0, 0, 0.1]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><cylinderGeometry args={[1.25, 1.5, 0.5, 28]} /></mesh>
+      <mesh position={[0, 0, 0.36]} material={m.black}><circleGeometry args={[1.1, 28]} /></mesh>
+      <mesh position={[0, 0, 0.38]}><ringGeometry args={[1.12, 1.26, 36]} /><meshBasicMaterial color={portColor} /></mesh>
+      <mesh position={[0, 0, 0.39]}><planeGeometry args={[1.5, 0.07]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+      <mesh position={[0, 0, 0.39]}><planeGeometry args={[0.07, 1.5]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+      <mesh position={[0, 0, 0.4]}><ringGeometry args={[0.28, 0.34, 24]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+    </group>
+  );
+}
+
 /** Fictional orbital station seen from the approaching shuttle. The docking port faces +z. */
 export function StationExterior({ portColor = '#35e07a' }: { portColor?: string }) {
   const m = M();
@@ -426,12 +444,7 @@ export function StationExterior({ portColor = '#35e07a' }: { portColor?: string 
     <group>
       {/* Docking module and port */}
       <mesh position={[0, 0, -3]} rotation={[Math.PI / 2, 0, 0]} material={m.hull}><cylinderGeometry args={[2.2, 2.2, 6, 28]} /></mesh>
-      <mesh position={[0, 0, 0.1]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><cylinderGeometry args={[1.25, 1.5, 0.5, 28]} /></mesh>
-      <mesh position={[0, 0, 0.36]} material={m.black}><circleGeometry args={[1.1, 28]} /></mesh>
-      <mesh position={[0, 0, 0.38]}><ringGeometry args={[1.12, 1.26, 36]} /><meshBasicMaterial color={portColor} /></mesh>
-      <mesh position={[0, 0, 0.39]}><planeGeometry args={[1.5, 0.07]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
-      <mesh position={[0, 0, 0.39]}><planeGeometry args={[0.07, 1.5]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
-      <mesh position={[0, 0, 0.4]}><ringGeometry args={[0.28, 0.34, 24]} /><meshBasicMaterial color="#f2f4f7" /></mesh>
+      <DockingPort portColor={portColor} />
       {/* Node and crossing modules */}
       <mesh position={[0, 0, -8]} material={m.hull}><sphereGeometry args={[2.9, 24, 16]} /></mesh>
       <mesh position={[0, 0, -16]} rotation={[Math.PI / 2, 0, 0]} material={m.hull}><cylinderGeometry args={[2.3, 2.3, 12, 28]} /></mesh>
