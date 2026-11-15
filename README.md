@@ -2,7 +2,7 @@
 
 A 3D browser astronaut mission trainer for ages 7 to 12, built for the NASA Space Apps challenge **Build a Junior Astronaut Mission Trainer**. One trainee astronaut goes from an Earth academy to a shuttle flight, an orbital station, a lunar outpost and a Mars outpost. The signature mechanic is **Mission Replay**: restore a decision checkpoint, change one choice and compare both outcomes.
 
-Built with React 19, TypeScript, Vite 8, three.js r187 and React Three Fiber 9. All models, sounds and icons are generated in code. The bundled third-party assets are four NASA globe maps in `public/textures/` and three typefaces under the SIL Open Font License (Space Grotesk, JetBrains Mono and Exo 2), installed from npm with everything else. See `docs/SCIENCE_AND_CREDITS.md`.
+Built with React 19, TypeScript, Vite 8, three.js r187 and React Three Fiber 9. All models, sounds and icons are generated in code. The bundled third-party assets are NASA imagery in `public/textures/` (four globe maps, plus the Moon and Mars ground the player walks on, made from Lunar Reconnaissance Orbiter and Mars Viking mosaic imagery) and three typefaces under the SIL Open Font License (Space Grotesk, JetBrains Mono and Exo 2), installed from npm with everything else. See `docs/SCIENCE_AND_CREDITS.md`.
 
 This repository began as a pre-event prep folder. Those notes, data samples and scripts are still here: see [Pre-event prep notes](#pre-event-prep-notes) at the end.
 

@@ -437,7 +437,7 @@ export function Credits() {
         <section className="panel">
           <h2 className="mini-head"><Icon name="gear" size={16} /> Assets and code</h2>
           <ul>
-            <li>All 3D models, textures, sounds, icons, planet art and the Beyond Earth mission patch are generated in code for this project. No third-party models, images or audio files are included.</li>
+            <li>All 3D models, sounds, icons and the Beyond Earth mission patch are generated in code for this project. The planet globes and menu plates use NASA imagery: Earth (NASA SVS 3615), Moon (NASA SVS 4720, Lunar Reconnaissance Orbiter) and Mars (NASA 3D Resources). The Moon and Mars ground you walk on is real NASA surface imagery too — Lunar Reconnaissance Orbiter camera data (SVS 4720) and the Mars Viking MDIM21 colour mosaic served by NASA Mars Trek — processed only to tile smoothly. No other third-party models, images or audio files are included.</li>
             <li>Typefaces: Space Grotesk (The Space Grotesk Project Authors), JetBrains Mono (The JetBrains Mono Project Authors) and Exo 2 (The Exo 2 Project Authors), used under the SIL Open Font License 1.1 and bundled with the game.</li>
             <li>No NASA insignia or national flags are used. Beyond Earth is a student hackathon project and is not endorsed by NASA.</li>
             <li>Open-source libraries: React, React DOM, three.js, React Three Fiber and Zustand (all MIT licensed). Built with Vite and TypeScript.</li>

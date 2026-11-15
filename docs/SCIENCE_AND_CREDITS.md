@@ -41,7 +41,10 @@
   - `earth.jpg`: "Equirectangular Projected Earth", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/3615/ (`earth_noClouds.0330.jpg`). Used on the Earth globe, the Earth plates on the menus and in the Gravity Test Chamber.
   - `moon.jpg`: "CGI Moon Kit", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/4720/ (`lroc_color_2k.jpg`, from Lunar Reconnaissance Orbiter data). Moon plates on the menus and the Gravity Test Chamber.
   - `mars.jpg` and `jupiter.jpg`: NASA 3D Resources, https://science.nasa.gov/3d-resources/, fetched from its mirror https://github.com/nasa/NASA-3D-Resources (`Images and Textures/Mars`, `Images and Textures/Jupiter`). Mars plates on the menus (Mars only) and the Gravity Test Chamber.
-- The ground walked on, the clouds and everything else are still drawn in code.
+- **Four derived NASA ground textures** in `public/textures/`, made 15 November 2026 from the sources below. Each is a cropped region of real surface imagery, mirror-blended at the edges so it tiles without seams, contrast-balanced, and tinted to the game's palette; the `_relief` variants are luminance maps of the same crop, used for roughness and sparkle. The colour detail the player walks on is genuine spacecraft photography.
+  - `moon_ground.jpg` and `moon_relief.jpg`: derived from `lroc_color_2k.jpg`, "CGI Moon Kit", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/4720/ (Lunar Reconnaissance Orbiter Camera data). Ground of the Moon missions (Power Before Shadow, The Last Battery).
+  - `mars_ground.jpg` and `mars_relief.jpg`: derived from the Mars Viking MDIM21 colour mosaic (232 m/px), served as map tiles by NASA Mars Trek, https://trek.nasa.gov/mars/ (tile endpoint `trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m`). Ground of the Mars mission (Dust Storm Outpost).
+- The clouds, the painted fallback ground shown if a texture file is missing, and everything else are still drawn in code.
 - **No other third-party models, images or audio files.**
 - **No NASA insignia and no flags.** Beyond Earth is a hackathon project and is not endorsed by NASA.
 
