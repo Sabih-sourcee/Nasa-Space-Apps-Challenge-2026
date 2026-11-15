@@ -1,9 +1,9 @@
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useReducedMotion } from './GameCanvas';
 import type { HeightFn, RockSpec } from './terrain';
-import { earthTexture, fbm, grainTexture, groundTexture, rng, type GroundKind } from './textures';
+import { earthMaps, realEarth, fbm, grainTexture, groundRelief, groundTexture, rng, type GroundKind } from './textures';
 
 /** Gradient sky sphere. Colours are passed in so a dust storm can tint it live. */
 export function SkyDome({ top, horizon, radius = 1100, tint }: { top: string; horizon: string; radius?: number; tint?: React.MutableRefObject<{ top: THREE.Color; horizon: THREE.Color } | null> }) {
@@ -58,20 +58,62 @@ export function Stars({ count = 1600, radius = 1000, opacity }: { count?: number
 }
 
 /** Painted Earth with a thin blue atmosphere rim. Lit by the scene's Sun, so its phase is right. */
-export function EarthGlobe({ position, radius, spin = 0.01 }: { position: [number, number, number]; radius: number; spin?: number }) {
-  const tex = useMemo(() => earthTexture(), []);
+/** `below` is for a planet seen from orbit, under the camera: it turns the globe so warm latitudes face up, not the pole. */
+export function EarthGlobe({ position, radius, spin = 0.01, below = false }: { position: [number, number, number]; radius: number; spin?: number; below?: boolean }) {
+  const maps = useMemo(() => earthMaps(), []);
+  // The NASA map takes over from the painted one as soon as it has loaded. Clouds stay painted.
+  const [real, setReal] = useState<{ map: THREE.Texture; rough: THREE.Texture } | null>(null);
+  useEffect(() => {
+    let on = true;
+    realEarth().then((r) => { if (on) setReal(r); }).catch(() => { /* keep the painted Earth */ });
+    return () => { on = false; };
+  }, []);
   const globe = useRef<THREE.Mesh>(null);
+  const clouds = useRef<THREE.Mesh>(null);
   const reduced = useReducedMotion();
-  useFrame((_, d) => { if (globe.current && !reduced) globe.current.rotation.y += d * spin; });
+  // The thin blue line of air: brightest where you look through the most of it, at the edge.
+  const air = useMemo(() => new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { tint: { value: new THREE.Color('#58a6ff') } },
+    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 tint; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - max(dot(normalize(vN), normalize(vV)), 0.0), 2.6); gl_FragColor = vec4(tint, f * 0.85); }',
+  }), []);
+  // Clouds: the soft cloud map sets where they are, and the same map repeated small breaks up their edges.
+  const cloudMat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({ color: '#ffffff', alphaMap: maps.clouds, transparent: true, depthWrite: false, roughness: 1, metalness: 0, emissive: '#8fa6c4', emissiveIntensity: 0.1, fog: false });
+    m.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <alphamap_fragment>', `#ifdef USE_ALPHAMAP
+        float cBase = texture2D(alphaMap, vAlphaMapUv).g;
+        float cFine = texture2D(alphaMap, vAlphaMapUv * vec2(23.0, 11.0)).g - 0.5;
+        float cFiner = texture2D(alphaMap, vAlphaMapUv * vec2(97.0, 47.0) + 0.3).g - 0.5;
+        diffuseColor.a *= smoothstep(0.36, 0.6, cBase + cFine * 0.26 + cFiner * 0.12) * 0.96;
+      #endif`);
+    };
+    return m;
+  }, [maps]);
+  useFrame((_, d) => {
+    if (reduced) return;
+    if (globe.current) globe.current.rotation.y += d * spin;
+    // Clouds drift a little faster than the ground turns.
+    if (clouds.current) clouds.current.rotation.y += d * spin * 1.35;
+  });
   return (
     <group position={position}>
+      <group rotation={below ? [0.75, 0, 0.25] : [0, 0, 0]}>
       <mesh ref={globe} rotation={[0.35, 2.2, 0.1]}>
-        <sphereGeometry args={[radius, 64, 40]} />
-        <meshStandardMaterial map={tex} roughness={0.85} metalness={0} emissive="#16335c" emissiveIntensity={0.12} fog={false} />
+        <sphereGeometry args={[radius, 96, 64]} />
+        <meshStandardMaterial map={real?.map ?? maps.map} roughnessMap={real?.rough ?? maps.rough} roughness={1} metalness={0} emissive="#16335c" emissiveIntensity={0.1} fog={false} />
       </mesh>
-      <mesh scale={1.025}>
+      <mesh ref={clouds} rotation={[0.35, 2.2, 0.1]} scale={1.006} material={cloudMat}>
+        <sphereGeometry args={[radius, 96, 64]} />
+      </mesh>
+      </group>
+      <mesh scale={1.012} material={air}>
+        <sphereGeometry args={[radius, 64, 40]} />
+      </mesh>
+      <mesh scale={1.03}>
         <sphereGeometry args={[radius, 48, 32]} />
-        <meshBasicMaterial color="#6fb6ff" transparent opacity={0.16} side={THREE.BackSide} depthWrite={false} fog={false} />
+        <meshBasicMaterial color="#6fb6ff" transparent opacity={0.14} side={THREE.BackSide} depthWrite={false} fog={false} />
       </mesh>
     </group>
   );
@@ -101,10 +143,28 @@ export function Terrain({ height, kind, size = 280, segments = 150, repeat = 40,
     const map = groundTexture(kind).clone();
     map.needsUpdate = true;
     map.repeat.set(repeat, repeat);
-    const bump = grainTexture().clone();
+    // Moon and Mars have their own relief, lined up with the colour: crater rims, ripples and stones catch the sun.
+    const own = kind === 'moon' || kind === 'mars';
+    const bump = (own ? groundRelief(kind) : grainTexture()).clone();
     bump.needsUpdate = true;
-    bump.repeat.set(repeat * 2, repeat * 2);
-    return new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: 1.2, roughness: 0.97, metalness: 0, color, vertexColors: true });
+    bump.repeat.set(own ? repeat : repeat * 2, own ? repeat : repeat * 2);
+    const m = new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: own ? 2.4 : 1.2, roughness: 0.97, metalness: 0, color, vertexColors: true });
+    if (own) {
+      // Seen from above, a repeated texture shows as a grid. Each sample is mixed with a second one
+      // that is larger and turned, so the two never line up and the repeat is hidden.
+      const second = 'mat2(0.829, -0.559, 0.559, 0.829) * UV * 0.29 + vec2(0.37, 0.11)';
+      m.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <map_fragment>', `#ifdef USE_MAP
+            diffuseColor *= mix(texture2D(map, vMapUv), texture2D(map, ${second.replace('UV', 'vMapUv')}), 0.45);
+          #endif`)
+          .replace('#include <bumpmap_pars_fragment>', THREE.ShaderChunk.bumpmap_pars_fragment
+            .replace(/texture2D\(\s*bumpMap\s*,/g, 'bumpMix(')
+            .replace('uniform float bumpScale;', `uniform float bumpScale;
+              vec4 bumpMix(vec2 uv) { return mix(texture2D(bumpMap, uv), texture2D(bumpMap, ${second.replace('UV', 'uv')}), 0.45); }`));
+      };
+    }
+    return m;
   }, [kind, repeat, color]);
   return <mesh geometry={geom} material={mat} receiveShadow />;
 }

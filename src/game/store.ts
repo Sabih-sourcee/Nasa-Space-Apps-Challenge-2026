@@ -13,7 +13,7 @@ import { setAudioEnabled, setSpeechEnabled } from './audio';
 import { hud } from './hud';
 import { input } from './input';
 
-export type Screen = 'home' | 'atlas' | 'briefing' | 'mission' | 'debrief' | 'credits' | 'crew';
+export type Screen = 'home' | 'atlas' | 'briefing' | 'mission' | 'debrief' | 'credits' | 'crew' | 'gravity';
 export type Mode = 'campaign' | 'judge';
 
 export interface MissionResult {

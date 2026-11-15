@@ -45,8 +45,16 @@ interface Props {
 export function WalkerRig({ env, state, interactables, onInteract, onStep, carrying = false, carried, chestLight, gloveAlert, frozen = false, cameraOffset = [0, 3.4, 8.2], lookHeight = 1.3, children }: Props) {
   const group = useRef<THREE.Group>(null);
   const anim = useRef(makeAnim('walk'));
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const reduced = useReducedMotion();
+  // Mouse and touch walking: click or tap the ground to walk there, or hold and drag to keep steering.
+  const goal = useRef<{ x: number; z: number; use: string | null } | null>(null);
+  const goalRing = useRef<THREE.Mesh>(null);
+  const stuck = useRef(0);
+  const frozenRef = useRef(frozen);
+  frozenRef.current = frozen;
+  const listRef = useRef(interactables);
+  listRef.current = interactables;
   const target = useMemo(() => new THREE.Vector3(), []);
   const desired = useMemo(() => new THREE.Vector3(), []);
   const look = useRef(new THREE.Vector3(state.current.x, state.current.y + lookHeight, state.current.z));
@@ -58,14 +66,70 @@ export function WalkerRig({ env, state, interactables, onInteract, onStep, carry
     return () => { hud.set({ prompt: null }); };
   }, [state]);
 
+  useEffect(() => {
+    const el = gl.domElement;
+    el.style.touchAction = 'none';
+    const ray = new THREE.Raycaster();
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hit = new THREE.Vector3();
+    let down = false;
+    const aim = (ev: PointerEvent, first: boolean) => {
+      if (frozenRef.current) return;
+      const r = el.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1), camera);
+      plane.constant = -state.current.y;
+      if (!ray.ray.intersectPlane(plane, hit)) return;
+      // A click on something you can use walks there and uses it.
+      let use: string | null = goal.current?.use ?? null;
+      if (first) {
+        use = null;
+        let bestD = Infinity;
+        for (const it of listRef.current()) {
+          if (!it.enabled) continue;
+          const d = Math.hypot(it.x - hit.x, it.z - hit.z);
+          if (d <= Math.max(1.4, it.r) && d < bestD) { use = it.id; bestD = d; }
+        }
+      }
+      goal.current = { x: hit.x, z: hit.z, use };
+      stuck.current = 0;
+    };
+    const onDown = (ev: PointerEvent) => { if (ev.button !== 0) return; down = true; aim(ev, true); };
+    const onMove = (ev: PointerEvent) => { if (down) aim(ev, false); };
+    const onUp = () => { down = false; };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [gl, camera, state]);
+
   useSim((dt) => {
     const s = state.current;
     const e = env(s);
     const jump = input.consume('primary');
     const use = input.consume('use');
+    let moveX = input.axisX();
+    let moveZ = -input.axisY();
+    // The keyboard always wins: any movement key cancels the mouse target.
+    if (moveX !== 0 || moveZ !== 0 || frozen) goal.current = null;
+    const g = goal.current;
+    if (g) {
+      const dx = g.x - s.x;
+      const dz = g.z - s.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.3) goal.current = null;
+      else { moveX = dx / dist; moveZ = dz / dist; }
+    }
     const next = frozen
       ? stepWalker(s, { moveX: 0, moveZ: 0, jump: false }, dt, e)
-      : stepWalker(s, { moveX: input.axisX(), moveZ: -input.axisY(), jump }, dt, e);
+      : stepWalker(s, { moveX, moveZ, jump }, dt, e);
+    // Walking into a wall for half a second gives up on the target.
+    if (goal.current) { stuck.current = Math.hypot(next.x - s.x, next.z - s.z) < 0.004 ? stuck.current + 1 : 0; if (stuck.current > 30) goal.current = null; }
     state.current = next;
     onStep?.(next, dt);
 
@@ -78,6 +142,8 @@ export function WalkerRig({ env, state, interactables, onInteract, onStep, carry
     }
     nearest.current = best;
     if (use && best && !frozen) onInteract(best.id);
+    // Arrived at the thing that was clicked: use it.
+    else if (goal.current?.use && best && best.id === goal.current.use && !frozen) { goal.current = null; onInteract(best.id); }
   }, (delta) => {
     const s = state.current;
     const e = env(s);
@@ -107,14 +173,25 @@ export function WalkerRig({ env, state, interactables, onInteract, onStep, carry
     }
     camera.lookAt(look.current);
 
+    if (goalRing.current) {
+      goalRing.current.visible = !!goal.current;
+      if (goal.current) goalRing.current.position.set(goal.current.x, s.y + 0.04, goal.current.z);
+    }
+
     const n = nearest.current;
     hud.set({ prompt: n && !frozen ? `Press E: ${n.label}` : null });
   });
 
   return (
-    <Astronaut ref={group} anim={anim} chestLight={chestLight} gloveAlert={gloveAlert}>
-      {carrying && <group position={[0, 1.12, 0.42]}>{carried ?? <Pouch />}</group>}
-      {children}
-    </Astronaut>
+    <>
+      <Astronaut ref={group} anim={anim} chestLight={chestLight} gloveAlert={gloveAlert}>
+        {carrying && <group position={[0, 1.12, 0.42]}>{carried ?? <Pouch />}</group>}
+        {children}
+      </Astronaut>
+      <mesh ref={goalRing} visible={false} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.28, 0.4, 28]} />
+        <meshBasicMaterial color="#ffc83d" transparent opacity={0.9} depthWrite={false} />
+      </mesh>
+    </>
   );
 }

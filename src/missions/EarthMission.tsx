@@ -63,14 +63,28 @@ export function EarthWorld({ follow }: { follow?: React.MutableRefObject<{ x: nu
 export function HomeScene() {
   const anim = useRef(makeAnim('walk'));
   const focus = useRef({ x: 30.8, y: 0, z: -113.4 });
-  useFrame(({ camera }) => {
-    camera.position.set(27.5, 1.6, -105);
-    camera.lookAt(30, 13.5, -190);
+  const body = useRef<THREE.Group>(null);
+  const mouse = useRef({ x: 0, y: 0 });
+  const eased = useRef({ x: 0, y: 0 });
+  // The menu sits over the canvas, so the pointer is read from the window.
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => { mouse.current = { x: (e.clientX / window.innerWidth) * 2 - 1, y: (e.clientY / window.innerHeight) * 2 - 1 }; };
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
+  useFrame(({ camera }, delta) => {
+    const k = 1 - Math.exp(-3 * Math.min(delta, 0.1));
+    eased.current.x += (mouse.current.x - eased.current.x) * k;
+    eased.current.y += (mouse.current.y - eased.current.y) * k;
+    // Moving the mouse leans the view, and the astronaut turns to follow it.
+    camera.position.set(27.5 + eased.current.x * 1.6, 1.6 - eased.current.y * 0.5, -105);
+    camera.lookAt(30 + eased.current.x * 5, 13.5 - eased.current.y * 3, -190);
+    if (body.current) body.current.rotation.y = -0.37 + eased.current.x * 0.9;
   });
   return (
     <>
       <EarthWorld follow={focus} />
-      <group position={[30.8, 0, -113.4]} rotation={[0, -0.37, 0]}>
+      <group ref={body} position={[30.8, 0, -113.4]} rotation={[0, -0.37, 0]}>
         <Astronaut anim={anim} still />
       </group>
     </>

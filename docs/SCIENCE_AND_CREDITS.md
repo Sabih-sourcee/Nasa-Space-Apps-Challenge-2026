@@ -34,6 +34,11 @@
 - **3D models, textures and sounds:** generated in code in `src/three/` and `src/game/audio.ts`.
 - **Interface icons, planet art and the Beyond Earth patch:** drawn in code as inline SVG in `src/ui/icons.tsx` and `src/ui/art.tsx`.
 - **Font:** Exo 2, copyright The Exo 2 Project Authors, SIL Open Font License 1.1. It is the one third-party asset in the game. It comes from the `@fontsource-variable/exo-2` npm package and is bundled into the build, so nothing is downloaded while playing. The licence text is in `node_modules/@fontsource-variable/exo-2/LICENSE`.
+- **Four NASA globe maps** in `public/textures/`, downloaded 15 November 2026. NASA imagery is generally free to use under the NASA Images and Media Usage Guidelines. They are used unchanged.
+  - `earth.jpg`: "Equirectangular Projected Earth", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/3615/ (`earth_noClouds.0330.jpg`). Used on the Earth globe and in the Gravity Test Chamber.
+  - `moon.jpg`: "CGI Moon Kit", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/4720/ (`lroc_color_2k.jpg`, from Lunar Reconnaissance Orbiter data). Gravity Test Chamber.
+  - `mars.jpg` and `jupiter.jpg`: NASA 3D Resources, https://science.nasa.gov/3d-resources/, fetched from its mirror https://github.com/nasa/NASA-3D-Resources (`Images and Textures/Mars`, `Images and Textures/Jupiter`). Gravity Test Chamber.
+- The ground walked on, the clouds and everything else are still drawn in code.
 - **No other third-party models, images or audio files.**
 - **No NASA insignia and no flags.** Beyond Earth is a hackathon project and is not endorsed by NASA.
 

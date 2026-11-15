@@ -86,7 +86,7 @@ export function DockingScene({ sim, tier, onEnd }: { sim: React.MutableRefObject
       <Stars />
       <ambientLight intensity={0.16} />
       <SunLight direction={[0.6, 0.5, 0.6]} intensity={3.6} size={40} />
-      <EarthGlobe position={[80, -1135, -520]} radius={1100} spin={0.006} />
+      <EarthGlobe position={[80, -1135, -520]} radius={1100} spin={0.006} below />
       <group ref={station}><StationExterior portColor={portColor} /></group>
       {/* Shuttle nose and docking probe seen at the bottom of the docking camera */}
       <mesh position={[0, -1.9, -2.9]} rotation={[-Math.PI / 2 - 0.1, 0, 0]} material={m.white}><coneGeometry args={[1.05, 2.6, 28]} /></mesh>

@@ -73,6 +73,7 @@ function KeyLegend({ layout, labels }: { layout: HudState['touch']; labels: HudS
       {labels.brake && <KeyHint keys={['X']} label={labels.brake} />}
       {(layout !== 'flight' || labels.use !== 'Use') && <KeyHint keys={['E']} label={labels.use} />}
       {labels.recover && <KeyHint keys={['R']} label={plainLabel(labels.recover)} />}
+      {layout === 'walk' && <span className="key-hint mouse-hint"><Icon name="hand" size={16} /><span className="key-what">Click the ground to walk</span></span>}
     </div>
   );
 }

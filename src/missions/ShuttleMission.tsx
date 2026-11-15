@@ -287,7 +287,7 @@ function Outside({ sim, tier, phase }: { sim: React.MutableRefObject<AscentState
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.2, -600]}><planeGeometry args={[4000, 700]} /><meshStandardMaterial color="#2e6c9c" roughness={0.4} /></mesh>
         <group position={[-7.5, -6, -3.5]}><LaunchTower height={56} /></group>
       </group>
-      <group ref={earth} visible={false}><EarthGlobe position={[0, 0, 0]} radius={1500} spin={0.004} /></group>
+      <group ref={earth} visible={false}><EarthGlobe position={[0, 0, 0]} radius={1500} spin={0.004} below /></group>
       <mesh ref={ringA} visible={false}><torusGeometry args={[ringR, 0.09, 8, 48]} /><meshBasicMaterial color="#35e07a" fog={false} /></mesh>
       <mesh ref={ringB} visible={false}><torusGeometry args={[ringR, 0.06, 8, 48]} /><meshBasicMaterial color="#6fb6ff" fog={false} transparent opacity={0.6} /></mesh>
     </>
