@@ -1,6 +1,6 @@
 # Progress log and test record
 
-14 November 2026. Windows 11, Node 24.15, Chromium-based in-app browser, Intel UHD Graphics 620.
+14 November 2026, with Stage 9 added on 15 November 2026. Windows 11, Node 24.15, Chromium-based in-app browser, Intel UHD Graphics 620.
 
 ## How the browser checks were run
 
@@ -15,10 +15,10 @@ Every result below marked "browser" went through the real input layer, the real 
 
 | Command | Result |
 | --- | --- |
-| `npm install` | OK. react 19.3.1, three 0.187.0, @react-three/fiber 9.8.2, zustand 5.1.0, vite 8.3.8, typescript 7.0.2, vitest 5.1.0 |
+| `npm install` | OK. react 19.3.1, three 0.187.0, @react-three/fiber 9.8.2, zustand 5.1.0, vite 8.3.8, typescript 7.0.2, vitest 5.1.0, @fontsource-variable/exo-2 5.3.0 |
 | `npx tsc --noEmit` | 0 errors |
-| `npm test` | 5 files, **113 passed**, 0 failed |
-| `npm run build` | OK. `dist/` 1.37 MB JS (384 kB gzip), 18 kB CSS, 65 modules |
+| `npm test` | 7 files, **180 passed**, 0 failed (15 November, after Stage 10) |
+| `npm run build` | OK. `dist/` 1.51 MB JS (425 kB gzip), 54 kB CSS, five font files (126 kB, of which the browser loads the 41 kB Latin one) |
 | `npm run dev` | Serves on http://localhost:5173 |
 
 ## Stage results
@@ -88,6 +88,82 @@ Added after the first release to close FR-04. An extra station mission that unlo
 - Junior: the gauge names its trend (FALLING), the arm is steered by its gripper, and the Space key also works the gripper. Finished at 97% with the experiment saved.
 - **Fixed during this stage:** the transfer port sat just outside the shoulder joint's limit, so the arm could only get within 0.16 m. The port moved inside the arm's range, and a test now checks both targets against the joint limits.
 
+### Stage 10. Commander story and two ship missions (15 November): Pass, with limits below
+
+Added on top of everything already built. Nothing was removed. Two planned catalogue entries became playable: F03 (was "Emergency Protocol") and L03 (was "Rover Traverse").
+
+- **Commander Reyes** (`src/sim/story.ts`, `src/ui/Commander.tsx`): a three-panel comic briefing for all eight playable missions, with different lines for Junior, Middle and Advanced. The scene is not mounted until Take Control, so nothing runs behind the briefing. Mission Log on the mission map replays any unlocked briefing. Radio calls and the results screen are now signed by Reyes.
+- **F03 Keep the Ship Flying** (`src/sim/ship.ts`, `src/missions/ShipMission.tsx`): four rooms, nine physical tasks, then docking with the existing docking scene. With navigation restored the docking uses the easier limits; without it, the tier's own limits.
+- **L03 The Last Battery** (`src/sim/lastBattery.ts`, `src/missions/LastBatteryMission.tsx`): one battery, two sockets. The clock moves only when the player acts, so a replay is exactly repeatable.
+- **Carry-over**: F03 saves `batterySecured` in its mission record. L03 reads it for the briefing, the starting place of the battery and the starting clock.
+- 43 new tests in `tests/story.test.ts`. `npm test`: 7 files, **180 passed**.
+
+Browser checks, Judge Mode, Middle, the player's saves backed up and restored:
+
+| Check | Result |
+| --- | --- |
+| Briefing | Pass. Real Enter presses turned the three panels and Take Control started the mission beside the failed line. Skip started it at once. With the pane narrow, one panel shows at a time |
+| F03, navigation first | Pass. Inspect, take, fit to navigation, read gauge, backup loop (reserve 100 to 75), grab, rack, latch. The cockpit refused docking until the air was steady. Docked on the first approach, three stars, record saved with `batterySecured: true` |
+| L03 with the battery latched | Pass. Briefing said it was at the near rack. Shelter first: 4 units left, crops stage 1, readiness 100%, three stars |
+| L03 replay | Pass. Grow rack first from the same checkpoint: crops stage 2, 1 unit left, readiness 100%. Comparison rows matched. The first run's route showed as dots on the floor |
+| L03 with the battery not latched | Pass. Briefing said it was in the cargo crate, the mission started there, the clock started at 2, and grow-rack-first ended at 85% readiness |
+| Mission Log | Pass. Listed the eight missions, replayed a briefing and returned to the log |
+| Existing saves | Pass. A campaign save made before this stage (three missions done, checkpoint in the L02 habitat) loaded unchanged and resumed without a briefing |
+
+Not checked in this stage:
+
+- F03 with the connector on **ventilation**, and Junior and Advanced on both missions, were covered by unit tests only, not played in the browser.
+- The late-transfer path (low-flow mode) and both shift-stopped cards in L03 were covered by unit tests only.
+- The optional radio voiceover was not listened to.
+- Docking in F03 was flown by a scripted controller, not by hand.
+- A refresh in the middle of F03 or L03 was not tried. By design both restart from their last checkpoint (Ship ready, Battery in hand), not from the exact task.
+
+### Stage 9. Game interface redesign (15 November): Pass, with limits below
+
+The screens read like documents and forms. They were rebuilt as a game interface. Mission rules did not change.
+
+What changed:
+
+- **One visual language** in `src/styles.css`: gold for the main action and rewards, blue for secondary actions, cyan for information, green, amber and red for status. Chunky buttons with a pressed state, rounded panels, a bundled game font (Exo 2), and icons and planet art drawn in code (`src/ui/icons.tsx`, `src/ui/art.tsx`).
+- **Title screen**: one Play or Continue button, three tiles, difficulty as three buttons, call sign with rank and stars.
+- **Mission map** in place of the atlas table: five worlds on a route, mission cards with status in words and stars. "Show all 20 missions" adds the 14 planned ones.
+- **Mission card** in place of the briefing page: role, goal, steps, keys as keycaps, the three-star goal, one Start button.
+- **HUD**: objective banner with step lights, a "Checkpoint saved" note, alerts stacked under the objective (they can no longer cover it), icon gauges, the key to press as a keycap, tips as a Mission Control message, a list of the keys that work right now, a title card when a mission or checkpoint starts.
+- **Decisions**: a power board where every unit is one light, and choices as cards with their meter effects and cost. The board stays in view while the choices scroll, and so does the confirm button.
+- **Results**: stars, badge, what happened, a space fact, the next mission.
+- **Star ratings and ranks**: `src/sim/score.ts`, 24 tests in `tests/score.test.ts`. The tests also prove three stars can be reached on every tier: the steered climb passes every gate, and a search of every outpost plan finds one that ends with the air at 75% or more.
+- **Sound**: effects are now on by default and have their own switch, separate from spoken alerts (still off by default). Old saves are migrated: effects on, speech kept only if the old single switch was on.
+
+Browser checks, 1024 x 768, Judge Mode, the player's own saves backed up first and restored after:
+
+| Check | Result |
+| --- | --- |
+| E02 start to finish | Pass. Suit check as four gauge cards, fault reported and fixed, checkpoint note shown, lanes jumped, three stars with no misjudged reading. Rank went from Space Cadet to Flight Trainee |
+| F01 checklist, countdown, climb | Pass. Checklist panel and countdown did not cover the objective or the cockpit screens. Guidance alert appeared under the objective. Flying with no steering ended in the try-again card, and its button returned to the liftoff checkpoint |
+| Pause menu | Pass. Esc opened it with focus on Resume |
+| L02 outpost, Middle, three shifts | Pass. Board showed 6 lights with 5 used, then 3 of 3. The powered shelter was dimmed with its reason when only 1 unit was banked. Three stars (air 90%) |
+| Mission Replay | Pass. Checkpoint 1, skip the lights: board showed 3 of 6 used, comparison showed 1 unit against 3 units, the key table row matched |
+| S04, Middle | Pass. Three gauges read, lab reported, seal-now plan, three stars (0 wrong reports, 93% reserve) |
+| Keyboard only, reduced motion on | Pass. Real E, ArrowDown, ArrowUp, Tab and Enter presses opened the panel, changed the choice (board updated), locked the plan and closed the report |
+| Reduced motion | Pass. With the setting on, interface animations and transitions are off and content is fully visible |
+| Small screens | Pass. 375 x 812: title screen and mission map fit with no sideways scrolling. 768 x 1024: mission HUD with the on-screen buttons. Pointer events on Jump, Up and Left reached the input layer, and holding Up walked the astronaut 1 m. Not tried on a physical touchscreen |
+| Font | Pass. Only the Latin font file was requested |
+
+Fixed during this stage:
+
+- The choice cards first collapsed to one word per line (a flex layout bug). They now use a grid.
+- The decision panel opened scrolled to its bottom, hiding the power board. Focus now starts on the first choice.
+- The countdown covered the cockpit's own displays. It moved up into the windshield area.
+- A mouse click on a HUD button kept keyboard focus, so Space pressed that button again instead of jumping. HUD buttons now give focus back after a pointer press.
+- In S04 the console opened with focus on a Report button, so a stray key press could file a report. Focus now starts on Step back until all three gauges are read.
+
+Not checked in this stage:
+
+- S01, M04 and both landings were not replayed after the redesign. Their scenes are unchanged and use the same HUD component.
+- Star pop and screen entrance animations were only seen frozen mid-way, because the pane was hidden. Their timing at full speed is unverified.
+- Sound effects were not listened to.
+- The interface was not shown to a child. Whether it reads as clearer is still a judgement.
+
 ### Stage 7. Campaign and release QA
 
 | Check | Result |
@@ -99,7 +175,7 @@ Added after the first release to close FR-04. An extra station mission that unlo
 | Keyboard only, reduced motion on | Pass. Tab, arrow keys and Enter drove a decision and its report using real key presses |
 | On-screen controls | Pass with synthetic pointer events (move, jump, use). Not tried on a physical touchscreen |
 | Reduced motion | Pass. Camera locks to its target, alert pulse and beacon flashing become steady |
-| Muted play | Pass. Audio is off by default. Every alert has text and a caption |
+| Muted play | Pass on 14 November, when audio was off by default. Since Stage 9, sound effects are on by default and the speaker button mutes them. Every alert has text and a caption |
 | Reset Progress | Pass. Confirmation required. Only the active slot is erased |
 | Source links | 9 of 11 pages fetched and matched. See `SCIENCE_AND_CREDITS.md` |
 

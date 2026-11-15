@@ -3,11 +3,13 @@
 
 import { create } from 'zustand';
 import { DEMO_MISSIONS, missionAfter, missionStatus, nextMission, phaseIds } from '../sim/missions';
+import type { BatteryRun } from '../sim/lastBattery';
 import { commitTurn, restoreCheckpoint, startRun, type ApplyResult, type OutpostRun } from '../sim/outpost';
 import { getScenario } from '../sim/outpostScenarios';
 import { SAVE_KEYS, defaultSave, parseSave, serializeSave, type Checkpoint, type SaveData, type Settings } from '../sim/save';
+import { starsOf, type Rating, type Stars } from '../sim/score';
 import type { DemoMissionId, Tier } from '../sim/types';
-import { setAudioEnabled } from './audio';
+import { setAudioEnabled, setSpeechEnabled } from './audio';
 import { hud } from './hud';
 import { input } from './input';
 
@@ -24,7 +26,23 @@ export interface MissionResult {
   outpost: OutpostRun | null;
   baseline: OutpostRun | null;
   milestone: string | null;
+  /** Rating for this run, and what to change for more stars. */
+  stars: Stars;
+  starTip: string | null;
+  /** True when this run beat the stars already saved for the mission. */
+  newBest: boolean;
+  /** L03: this run from the socket choice, and the first run when this one is a replay. */
+  battery: BatteryRun | null;
+  batteryBaseline: BatteryRun | null;
 }
+
+/** What a mission scene reports when it ends. The store adds the rest. */
+export type MissionReport = Pick<MissionResult, 'crewStatus' | 'consequence' | 'objectives' | 'stats' | 'outpost'> & {
+  rating: Rating;
+  battery?: BatteryRun | null;
+  /** Story facts saved with the mission record for later missions to read. */
+  carry?: Record<string, boolean>;
+};
 
 export interface MissionRun {
   missionId: DemoMissionId;
@@ -36,6 +54,8 @@ export interface MissionRun {
   attempt: number;
   outpost: OutpostRun | null;
   replayBaseline: OutpostRun | null;
+  /** L03 replay: the first run to compare against. */
+  batteryBaseline?: BatteryRun | null;
 }
 
 interface GameState {
@@ -50,6 +70,8 @@ interface GameState {
   paused: boolean;
   settingsOpen: boolean;
   storageOk: boolean;
+  /** True while Commander Reyes is briefing: the scene starts on Take Control. */
+  intro: boolean;
 
   init: () => void;
   setMode: (mode: Mode) => void;
@@ -70,8 +92,10 @@ interface GameState {
   restartMission: () => void;
   outpostCommit: (chosen: string[]) => ApplyResult | null;
   outpostRecover: () => void;
-  completeMission: (result: Omit<MissionResult, 'missionId' | 'tier' | 'baseline' | 'milestone'>) => void;
+  completeMission: (report: MissionReport) => void;
   startReplay: (turnIndex: number) => void;
+  startChoiceReplay: () => void;
+  endIntro: () => void;
   continueAfterDebrief: () => void;
   setPaused: (paused: boolean) => void;
   quitToAtlas: () => void;
@@ -130,7 +154,7 @@ export const useGame = create<GameState>((set, get) => {
   };
 
   const saveCheckpoint = (run: MissionRun) => {
-    if (run.replayBaseline) return;
+    if (run.replayBaseline || run.batteryBaseline) return;
     persist({ ...get().save, checkpoint: checkpointOf(run) });
   };
 
@@ -138,7 +162,7 @@ export const useGame = create<GameState>((set, get) => {
     hud.reset();
     input.clear();
     input.setSuspended(false);
-    set({ run, screen: 'mission', result: null, paused: false, selected: run.missionId });
+    set({ run, screen: 'mission', result: null, paused: false, selected: run.missionId, intro: false });
   };
 
   return {
@@ -153,11 +177,13 @@ export const useGame = create<GameState>((set, get) => {
     paused: false,
     settingsOpen: false,
     storageOk: true,
+    intro: false,
 
     init: () => {
       if (get().ready) return;
       const slot = readSlot('campaign');
       setAudioEnabled(slot.save.settings.audio);
+      setSpeechEnabled(slot.save.settings.speech);
       set({ ready: true, save: slot.save, notes: slot.notes, storageOk: slot.ok });
       if (slot.ok) writeSlot('campaign', slot.save);
     },
@@ -180,6 +206,7 @@ export const useGame = create<GameState>((set, get) => {
     updateSettings: (patch) => {
       const save = { ...get().save, settings: { ...get().save.settings, ...patch } };
       if (patch.audio !== undefined) setAudioEnabled(patch.audio);
+      if (patch.speech !== undefined) setSpeechEnabled(patch.speech);
       persist(save);
     },
 
@@ -207,12 +234,15 @@ export const useGame = create<GameState>((set, get) => {
       };
       saveCheckpoint(run);
       enterMission(run);
+      // A fresh start opens with the commander's briefing.
+      set({ intro: true });
     },
 
     startMissionAt: (id, phase) => {
       // Judge Mode only: jump straight to a later checkpoint for a short demo.
       if (get().mode !== 'judge' || !phaseIds(id).includes(phase)) return;
       get().startMission(id);
+      set({ intro: false });
       if (phase !== phaseIds(id)[0]) get().setPhase(phase);
     },
 
@@ -258,6 +288,10 @@ export const useGame = create<GameState>((set, get) => {
     restartFromCheckpoint: () => {
       const run = get().run;
       if (!run) return;
+      if (run.batteryBaseline) {
+        enterMission({ ...run, stats: { ...run.stats, recoveries: (run.stats.recoveries ?? 0) }, attempt: attemptCounter++ });
+        return;
+      }
       if (run.replayBaseline) {
         // A replay restarts from the checkpoint it restored.
         const outpost = restoreCheckpoint(run.replayBaseline, run.stats.replayTurn ?? 0);
@@ -303,18 +337,21 @@ export const useGame = create<GameState>((set, get) => {
       saveCheckpoint(next);
     },
 
-    completeMission: (partial) => {
+    completeMission: (report) => {
       const run = get().run;
       if (!run) return;
+      const { rating, carry, battery, ...partial } = report;
       const def = DEMO_MISSIONS[run.missionId];
       const save = get().save;
-      const isReplay = !!run.replayBaseline;
+      const isReplay = !!run.replayBaseline || !!run.batteryBaseline;
+      const prev = save.completed[run.missionId];
+      const newBest = rating.stars > starsOf(prev);
+      const best = (newBest ? rating.stars : starsOf(prev)) as Stars;
       let milestone: string | null = null;
       if (!isReplay) {
-        const prev = save.completed[run.missionId];
         const completed = {
           ...save.completed,
-          [run.missionId]: { tier: run.tier, completions: (prev?.completions ?? 0) + 1, summary: partial.crewStatus },
+          [run.missionId]: { tier: run.tier, completions: (prev?.completions ?? 0) + 1, summary: partial.crewStatus, stars: best, ...(carry ? { flags: carry } : prev?.flags ? { flags: prev.flags } : {}) },
         };
         const milestones = [...save.milestones];
         if (def.milestone && !milestones.includes(def.milestone.id)) {
@@ -322,11 +359,18 @@ export const useGame = create<GameState>((set, get) => {
           milestone = def.milestone.label;
         }
         persist({ ...save, completed, milestones, checkpoint: null });
+      } else if (prev && newBest) {
+        // A replay never changes the checkpoint or the completion count, but a better plan keeps its stars.
+        persist({ ...save, completed: { ...save.completed, [run.missionId]: { ...prev, stars: best } } });
       }
       hud.reset();
       input.setSuspended(false);
       set({
-        result: { ...partial, missionId: run.missionId, tier: run.tier, baseline: run.replayBaseline, milestone },
+        result: {
+          ...partial, missionId: run.missionId, tier: run.tier, baseline: run.replayBaseline, milestone,
+          stars: rating.stars, starTip: rating.tip, newBest,
+          battery: battery ?? null, batteryBaseline: run.batteryBaseline ?? null,
+        },
         screen: 'debrief', paused: false,
       });
     },
@@ -342,6 +386,18 @@ export const useGame = create<GameState>((set, get) => {
         attempt: attemptCounter++, outpost, replayBaseline: baseline,
       });
     },
+
+    startChoiceReplay: () => {
+      const result = get().result;
+      if (!result?.battery) return;
+      const baseline = result.batteryBaseline ?? result.battery;
+      enterMission({
+        missionId: result.missionId, tier: baseline.tier, phase: 'power', flags: { replay: true, secured: baseline.secured }, stats: {},
+        attempt: attemptCounter++, outpost: null, replayBaseline: null, batteryBaseline: baseline,
+      });
+    },
+
+    endIntro: () => set({ intro: false }),
 
     continueAfterDebrief: () => {
       const result = get().result;

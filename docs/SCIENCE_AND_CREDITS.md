@@ -1,6 +1,6 @@
 # Science sources and credits
 
-14 November 2026. The in-game version of this list is the **Science and Credits** screen, generated from `src/sim/sources.ts`.
+14 November 2026. The Assets and Code sections were updated on 15 November 2026, when the interface font was added. The in-game version of this list is the **Science and Credits** screen, generated from `src/sim/sources.ts`.
 
 ## Sources and how they were checked
 
@@ -27,13 +27,15 @@
 | Real, sourced | Gravity on the Moon and Mars. Why astronauts float. Orbital speed. Sheltering during solar particle events. Mars signal delay. Thin Martian air and dust storms |
 | Archived record | The lunar solar alert's identifier and time. Not live data, not a forecast, and no dose is modelled |
 | Compressed time | Countdown and climb to orbit, both descents, outpost shifts, the wait for a reply from Earth |
-| Invented game values | Energy units, battery size, crop stages, the Air comfort score, fuel budgets, landing limits, storm length, the panel brush, backup cells, station gauge readings, leak rates, the air reserve, the two-joint arm, every vehicle, station and habitat |
+| Invented game values | Energy units, battery size, crop stages, the Air comfort score, fuel budgets, landing limits, storm length, the panel brush, backup cells, station gauge readings, leak rates, the air reserve, the two-joint arm, star ratings, ranks and badges, Commander Reyes and every line of dialogue, the transfer craft and its power branches, battery charge units and the crew readiness score, every vehicle, station and habitat |
 
 ## Assets
 
-- **3D models, textures, sounds, the Beyond Earth patch:** generated in code in `src/three/` and `src/game/audio.ts`. No third-party asset files.
+- **3D models, textures and sounds:** generated in code in `src/three/` and `src/game/audio.ts`.
+- **Interface icons, planet art and the Beyond Earth patch:** drawn in code as inline SVG in `src/ui/icons.tsx` and `src/ui/art.tsx`.
+- **Font:** Exo 2, copyright The Exo 2 Project Authors, SIL Open Font License 1.1. It is the one third-party asset in the game. It comes from the `@fontsource-variable/exo-2` npm package and is bundled into the build, so nothing is downloaded while playing. The licence text is in `node_modules/@fontsource-variable/exo-2/LICENSE`.
+- **No other third-party models, images or audio files.**
 - **No NASA insignia and no flags.** Beyond Earth is a hackathon project and is not endorsed by NASA.
-- **Fonts:** the system's own sans-serif. Nothing is downloaded.
 
 ## Code
 
@@ -43,6 +45,7 @@
 | three | 0.187.0 | MIT |
 | @react-three/fiber | 9.8.2 | MIT |
 | zustand | 5.1.0 | MIT |
+| @fontsource-variable/exo-2 | 5.3.0 | OFL-1.1 |
 | vite | 8.3.8 | MIT |
 | @vitejs/plugin-react | 6.3.0 | MIT |
 | vitest | 5.1.0 | MIT |

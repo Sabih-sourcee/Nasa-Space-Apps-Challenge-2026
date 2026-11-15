@@ -10,14 +10,16 @@ import {
   ASCENT_GATES, ASCENT_TUNING, ORBIT_SPEED, ascentDeviation, makeAscent, stepAscent, type AscentState,
 } from '../sim/flight';
 import { hintsOn } from '../sim/save';
+import { rateAscent } from '../sim/score';
 import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight, useReducedMotion, useSim } from '../three/GameCanvas';
 import { LaunchTower, M } from '../three/Props';
 import { EarthGlobe, SkyDome, Stars } from '../three/Scenery';
 import { groundTexture, makeScreen } from '../three/textures';
-import { Btn } from '../ui/common';
+import { Btn, Keycap } from '../ui/common';
 import { ResetCard } from '../ui/Hud';
+import { Icon } from '../ui/icons';
 
 interface CheckItem { id: string; label: string; done: string; twice?: boolean }
 
@@ -477,6 +479,7 @@ export function ShuttleMission() {
           { label: 'Attempts', value: String(attempts.current) },
         ],
         outpost: null,
+        rating: rateAscent(s.gatesMissed, attempts.current),
       }), 4200);
     }
   };
@@ -496,7 +499,7 @@ export function ShuttleMission() {
 
       {phase === 'checklist' && (
         <div className="side-panel" aria-label="Launch checklist">
-          <h3>☑ Launch checklist</h3>
+          <h3><Icon name="list" size={16} /> Launch checklist · {Math.min(done, items.length)} of {items.length}</h3>
           <ol>
             {items.map((it, i) => (
               <li key={it.id} className={i < done ? 'done' : i === done ? 'current' : ''}>
@@ -505,7 +508,7 @@ export function ShuttleMission() {
               </li>
             ))}
           </ol>
-          {!armed && <Btn onClick={confirm}>{items[done].twice && realign ? 'Align again' : 'Confirm'}: {items[done].label} (E)</Btn>}
+          {!armed && <Btn block icon="check" onClick={confirm}>{items[done].twice && realign ? 'Align again' : 'Confirm'}: {items[done].label} <Keycap>E</Keycap></Btn>}
           {armed && <p className="fine">All checks complete. Countdown running.</p>}
         </div>
       )}

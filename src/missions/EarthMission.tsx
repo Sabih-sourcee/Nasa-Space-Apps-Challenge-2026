@@ -6,6 +6,7 @@ import { hud } from '../game/hud';
 import { useGame } from '../game/store';
 import { GRAVITY_PRESETS, idealAirtime, makeWalker, type GravityId, type WalkEnv, type WalkerState } from '../sim/movement';
 import { hintsOn } from '../sim/save';
+import { rateSuitLab } from '../sim/score';
 import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight } from '../three/GameCanvas';
@@ -13,7 +14,8 @@ import { LaunchTower, M, Pouch, ShuttleStack, Sign, Strut } from '../three/Props
 import { ObjectiveMarker, SkyDome } from '../three/Scenery';
 import { groundTexture } from '../three/textures';
 import { WalkerRig, type Interactable } from '../three/WalkerRig';
-import { Btn, Dialog } from '../ui/common';
+import { Btn, Comm, Dialog } from '../ui/common';
+import { Icon } from '../ui/icons';
 
 const SUN: [number, number, number] = [0.45, 0.85, 0.5];
 
@@ -145,61 +147,64 @@ function SuitCheckPanel({ tier, state, setState, onClose, onCleared, onMistake }
     set(c.id, 'fixed');
   };
 
+  const judged = checks.filter((c) => state[c.id] === 'ok' || state[c.id] === 'fixed').length;
   return (
-    <Dialog title="Suit preflight check" onClose={onClose} wide>
-      <p>Inspect each item, compare it with the safe range, and decide: good, or a fault to report.</p>
-      {tier === 'advanced' && <div className="row"><Btn kind="ghost" onClick={() => setCard(!card)}>{card ? 'Close reference card' : 'Open reference card'}</Btn></div>}
-      <table className="checks">
-        <thead><tr><th>Item</th><th>Reading</th>{card && <th>Safe range</th>}<th>Your call</th></tr></thead>
-        <tbody>
-          {checks.map((c) => {
-            const st = state[c.id] ?? 'unseen';
-            return (
-              <tr key={c.id} className={st}>
-                <th scope="row">{c.label}</th>
-                <td className="reading">
-                  {st === 'unseen' ? '—' : st === 'fixed' ? c.fixedReading : c.reading}
-                  {hints && st === 'seen' && <small className="hint-inline"> {c.faulty ? 'Compare this with the safe range.' : ''}</small>}
-                </td>
-                {card && <td>{c.nominal}</td>}
-                <td>
-                  {st === 'unseen' && <Btn kind="ghost" onClick={() => { set(c.id, 'seen'); setNote(null); }}>Inspect</Btn>}
-                  {st === 'seen' && (
-                    <span className="row tight">
-                      <Btn kind="ghost" onClick={() => judge(c, 'ok')}>Looks good</Btn>
-                      <Btn kind="ghost" onClick={() => judge(c, 'fault')}>Report a fault</Btn>
-                    </span>
-                  )}
-                  {st === 'ok' && <span className="verdict good">✔ Good</span>}
-                  {st === 'fixed' && <span className="verdict good">✔ Fault fixed</span>}
-                  {st === 'reported' && <span className="verdict bad">! Fault reported</span>}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <Dialog title="Suit preflight check" icon="helmet" kicker={`${judged} of ${checks.length} items cleared`} onClose={onClose} wide>
+      <p className="lead">Inspect each item, compare it with the safe range, and decide: good, or a fault to report.</p>
+      {tier === 'advanced' && <div className="row"><Btn kind="ghost" size="sm" icon="book" onClick={() => setCard(!card)}>{card ? 'Close reference card' : 'Open reference card'}</Btn></div>}
+      <ul className="suit-grid">
+        {checks.map((c) => {
+          const st = state[c.id] ?? 'unseen';
+          return (
+            <li key={c.id} className={`suit-card ${st}`}>
+              <div className="suit-head">
+                <span className="suit-icon"><Icon name={CHECK_ICON[c.id] ?? 'gauge'} size={22} /></span>
+                <strong>{c.label}</strong>
+              </div>
+              <div className="suit-reading" aria-label={st === 'unseen' ? 'Not inspected yet' : undefined}>
+                {st === 'unseen' ? '? ? ?' : st === 'fixed' ? c.fixedReading : c.reading}
+              </div>
+              {card && <div className="suit-range">Safe range: {c.nominal}</div>}
+              {hints && st === 'seen' && c.faulty && <div className="hint-inline">Compare this with the safe range.</div>}
+              <div className="suit-actions">
+                {st === 'unseen' && <Btn kind="blue" size="sm" block icon="eye" onClick={() => { set(c.id, 'seen'); setNote(null); }}>Inspect</Btn>}
+                {st === 'seen' && (
+                  <>
+                    <Btn kind="good" size="sm" block icon="check" onClick={() => judge(c, 'ok')}>Looks good</Btn>
+                    <Btn kind="danger" size="sm" block icon="warning" onClick={() => judge(c, 'fault')}>Report a fault</Btn>
+                  </>
+                )}
+                {st === 'ok' && <span className="verdict good"><Icon name="check" size={18} /> Good</span>}
+                {st === 'fixed' && <span className="verdict good"><Icon name="check" size={18} /> Fault fixed</span>}
+                {st === 'reported' && <span className="verdict bad"><Icon name="warning" size={18} /> Fault reported</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
 
       {openFault && (
-        <fieldset className="action-group">
-          <legend>Fix: {openFault.label} reads {openFault.reading}</legend>
-          {hints && openFault.id === 'pressure' && <p className="hint-line"><strong>Hint:</strong> Look at the suit. One glove ring is glowing red.</p>}
+        <fieldset className="choice-group">
+          <legend><Icon name="wrench" size={16} /> Fix it <span>{openFault.label} reads {openFault.reading}</span></legend>
           <div className="stack">
-            {openFault.fixes.map((f) => <Btn key={f.label} kind="ghost" onClick={() => fix(openFault, f)}>{f.label}</Btn>)}
+            {hints && openFault.id === 'pressure' && <Comm name="Tip" tone="tip">Look at the suit. One glove ring is glowing red.</Comm>}
+            {openFault.fixes.map((f) => <Btn key={f.label} kind="ghost" block icon="wrench" onClick={() => fix(openFault, f)}>{f.label}</Btn>)}
           </div>
         </fieldset>
       )}
 
       {note && <p className="note" role="status">{note}</p>}
-      {blocked && <p className="error">{blocked}</p>}
-      <div className="row">
-        <Btn onClick={onCleared} disabled={!!blocked} autoFocus={!blocked}>Request clearance for training</Btn>
+      {blocked && <p className="error"><Icon name="lock" size={18} /> {blocked}</p>}
+      <div className="dialog-actions">
+        <Btn size="lg" icon="check" onClick={onCleared} disabled={!!blocked} autoFocus={!blocked}>Request clearance for training</Btn>
         <Btn kind="ghost" onClick={onClose}>Step back</Btn>
       </div>
-      <p className="fine">Fictional training procedure. Real suits are checked by a team with far longer checklists.</p>
+      <p className="fine center">Fictional training procedure. Real suits are checked by a team with far longer checklists.</p>
     </Dialog>
   );
 }
+
+const CHECK_ICON: Record<string, string> = { helmet: 'helmet', oxygen: 'air', radio: 'antenna', pressure: 'gauge' };
 
 // ---------------------------------------------------------------------------
 // Scene
@@ -371,6 +376,7 @@ export function EarthMission() {
         { label: 'Jump airtime, Moon gravity', value: fmt('moon') },
       ],
       outpost: null,
+      rating: rateSuitLab(n),
     }), 900);
   };
 

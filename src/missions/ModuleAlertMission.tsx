@@ -8,6 +8,7 @@ import { probe } from '../game/probe';
 import { useGame } from '../game/store';
 import { makeDrifter, nearestRail, stepDrift, type DriftEnv, type DriftState } from '../sim/movement';
 import { hintsOn } from '../sim/save';
+import { rateAlert } from '../sim/score';
 import {
   ALERT_TUNING, ARM, MODULE_LABEL, armPoints, abandonExperiment, canSeal, choosePlan, declareLeak, gaugeTrend, gaugesFor,
   inspectGauge, makeAlert, operateGripper, sealLab, stepAlert, stepArm, type AlertState, type ModuleId,
@@ -17,8 +18,9 @@ import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight, useReducedMotion, useSim } from '../three/GameCanvas';
 import { M, Sign, Strut } from '../three/Props';
 import { panelTexture } from '../three/textures';
-import { Btn, Dialog } from '../ui/common';
+import { Btn, Comm, Dialog } from '../ui/common';
 import { ResetCard } from '../ui/Hud';
+import { Icon } from '../ui/icons';
 import { FLOAT_Y, Module, RAILS, driftEnv } from './StationMission';
 
 /** What each handrail is next to in this mission. */
@@ -274,7 +276,7 @@ function ArmView({ alert, tier, onChange, onDone }: {
       hint: !hints ? null : tune.armMode === 'tip'
         ? 'Use W A S D to move the gripper to the amber ring. It turns green when you are close enough.'
         : 'A and D swing the whole arm. W and S bend the elbow. Use both to bring the gripper to the ring.',
-      touch: 'drift', touchLabels: { primary: 'Grip', use: 'Grip', recover: 'Give up (R)' },
+      touch: 'drift', touchLabels: { primary: 'Grip', use: 'Grip', recover: 'Give up (R)', move: 'Move the arm' },
     });
   });
 
@@ -359,18 +361,16 @@ function GaugePanel({ tier, module, onClose }: { tier: Tier; module: ModuleId; o
   const g = gaugesFor(tier).find((x) => x.module === module)!;
   const trend = gaugeTrend(g);
   return (
-    <Dialog title={`${MODULE_LABEL[module]}: hatch gauge`} onClose={onClose}>
-      <table className="deltas">
-        <tbody>
-          <tr><th scope="row">Pressure now</th><td>{g.now.toFixed(1)} kPa</td></tr>
-          <tr><th scope="row">One minute ago</th><td>{g.before.toFixed(1)} kPa</td></tr>
-          {tier === 'junior' && <tr className={trend === 'falling' ? 'down' : ''}><th scope="row">Trend</th><td>{trend === 'falling' ? '▼ FALLING' : 'STEADY'}</td></tr>}
-          {tier === 'advanced' && <tr><th scope="row">Sensor self-test</th><td>{g.sensor === 'ok' ? 'OK' : 'FAILED: reading frozen'}</td></tr>}
-        </tbody>
-      </table>
-      {hints && tier !== 'junior' && <p className="hint-line"><strong>Hint:</strong> Compare now with one minute ago. A leak keeps falling. A low number that does not move is something else.</p>}
-      <p className="fine">Illustrative readings for a fictional station.</p>
-      <div className="row"><Btn autoFocus onClick={onClose}>Close</Btn></div>
+    <Dialog title={`${MODULE_LABEL[module]}: hatch gauge`} icon="gauge" kicker="Pressure reading" onClose={onClose}>
+      <dl className="stat-tiles">
+        <div className="stat-tile"><dd>{g.now.toFixed(1)} kPa</dd><dt>Pressure now</dt></div>
+        <div className="stat-tile"><dd>{g.before.toFixed(1)} kPa</dd><dt>One minute ago</dt></div>
+        {tier === 'junior' && <div className={`stat-tile ${trend === 'falling' ? 'down' : ''}`}><dd>{trend === 'falling' ? '▼ FALLING' : 'STEADY'}</dd><dt>Trend</dt></div>}
+        {tier === 'advanced' && <div className={`stat-tile ${g.sensor === 'ok' ? '' : 'down'}`}><dd>{g.sensor === 'ok' ? 'OK' : 'FAILED: reading frozen'}</dd><dt>Sensor self-test</dt></div>}
+      </dl>
+      {hints && tier !== 'junior' && <Comm name="Tip" tone="tip">Compare now with one minute ago. A leak keeps falling. A low number that does not move is something else.</Comm>}
+      <div className="dialog-actions"><Btn autoFocus size="lg" icon="check" onClick={onClose}>Got it</Btn></div>
+      <p className="fine center">Illustrative readings for a fictional station.</p>
     </Dialog>
   );
 }
@@ -392,28 +392,31 @@ function ConsolePanel({ alert, tier, onClose, onChange, onFound }: {
       onChange();
       if (res.correct) onFound();
     };
+    // Until every gauge has been read, focus starts on "Step back" so a stray key press cannot file a report.
+    const allRead = gauges.every((g) => s.inspected[g.module]);
     return (
-      <Dialog title="Main console: which module is leaking?" onClose={onClose} wide>
-        <table className="summary">
-          <thead><tr><th>Module</th><th>Now</th><th>One minute ago</th>{tier === 'advanced' && <th>Sensor</th>}</tr></thead>
-          <tbody>
-            {gauges.map((g) => (
-              <tr key={g.module}>
-                <th scope="row">{MODULE_LABEL[g.module]}</th>
-                {s.inspected[g.module]
-                  ? <><td>{g.now.toFixed(1)} kPa</td><td>{g.before.toFixed(1)} kPa</td>{tier === 'advanced' && <td>{g.sensor === 'ok' ? 'OK' : 'FROZEN'}</td>}</>
-                  : <td colSpan={tier === 'advanced' ? 3 : 2}>Not read yet. Visit its hatch gauge.</td>}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p>Report the module whose pressure is falling. A wrong report seals a healthy module and costs {tune.wrongPenalty}% of the air reserve.</p>
-        <div className="row">
-          {gauges.map((g, i) => <Btn key={g.module} kind="ghost" autoFocus={i === 0} onClick={() => report(g.module)}>Report: {MODULE_LABEL[g.module]}</Btn>)}
-        </div>
+      <Dialog title="Which module is leaking?" icon="warning" kicker="Main console" onClose={onClose} wide>
+        <p className="lead">Report the module whose pressure is falling. A wrong report seals a healthy module and costs {tune.wrongPenalty}% of the air reserve.</p>
+        <ul className="module-grid">
+          {gauges.map((g, i) => (
+            <li key={g.module} className="module-card">
+              <strong>{MODULE_LABEL[g.module]}</strong>
+              {s.inspected[g.module]
+                ? (
+                  <>
+                    <span className="module-now">{g.now.toFixed(1)} kPa now</span>
+                    <span className="module-then">{g.before.toFixed(1)} kPa one minute ago</span>
+                    {tier === 'advanced' && <span className="module-then">Sensor: {g.sensor === 'ok' ? 'OK' : 'FROZEN'}</span>}
+                  </>
+                )
+                : <span className="module-unread">Not read yet. Visit its hatch gauge.</span>}
+              <Btn kind="blue" size="sm" block icon="flag" autoFocus={allRead && i === 0} onClick={() => report(g.module)}>Report: {MODULE_LABEL[g.module]}</Btn>
+            </li>
+          ))}
+        </ul>
         {note && <p className={note.good ? 'hint-line' : 'note'} role="status">{note.text}</p>}
-        <div className="row"><Btn kind="ghost" onClick={onClose}>Step back</Btn></div>
-        <p className="fine">No timer while this panel is open.</p>
+        <div className="dialog-actions"><Btn kind="ghost" autoFocus={!allRead} onClick={onClose}>Step back</Btn></div>
+        <p className="fine center">No timer while this panel is open.</p>
       </Dialog>
     );
   }
@@ -428,29 +431,40 @@ function ConsolePanel({ alert, tier, onClose, onChange, onFound }: {
     };
     const per10 = (tune.leakRate * 10).toFixed(1);
     return (
-      <Dialog title="Leak found: the lab module" onClose={onClose} wide tone="alert">
+      <Dialog title="Leak found: the lab module" icon="warning" kicker="Choose your plan" onClose={onClose} wide tone="alert">
         {note && <p className="hint-line" role="status">{note.text}</p>}
-        <p>Air reserve is at <strong>{Math.round(s.reserve)}%</strong>. While the lab hatch is open, the leak drains about <strong>{per10}%</strong> every 10 seconds. An experiment canister is still inside the lab.</p>
+        <p className="lead">Air reserve is at <strong>{Math.round(s.reserve)}%</strong>. While the lab hatch is open, the leak drains about <strong>{per10}%</strong> every 10 seconds. An experiment canister is still inside the lab.</p>
         <div className="stack">
-          <button type="button" className="replay-row" data-autofocus onClick={() => pick('seal_now')}>
-            <span className="replay-title">Seal the lab hatch now</span>
-            <span className="replay-meta">Stops the leak soonest and keeps the most air. The experiment stays inside and is lost.</span>
+          <button type="button" className="pick-card" data-autofocus onClick={() => pick('seal_now')}>
+            <span className="pick-num"><Icon name="shield" size={22} /></span>
+            <span className="pick-main">
+              <span className="pick-title">Seal the lab hatch now</span>
+              <span className="pick-meta">Stops the leak soonest and keeps the most air. The experiment stays inside and is lost.</span>
+            </span>
+            <Icon name="arrow" size={22} />
           </button>
-          <button type="button" className="replay-row" onClick={() => pick('save_first')}>
-            <span className="replay-title">Rescue the experiment first</span>
-            <span className="replay-meta">Move the canister to the transfer port with the robotic arm, then seal. Saves the experiment and costs air for every second it takes.</span>
+          <button type="button" className="pick-card" onClick={() => pick('save_first')}>
+            <span className="pick-num"><Icon name="flask" size={22} /></span>
+            <span className="pick-main">
+              <span className="pick-title">Rescue the experiment first</span>
+              <span className="pick-meta">Move the canister to the transfer port with the robotic arm, then seal. Saves the experiment and costs air for every second it takes.</span>
+            </span>
+            <Icon name="arrow" size={22} />
           </button>
         </div>
-        <p className="fine">No timer while this panel is open. Pressures and leak rates are illustrative.</p>
+        <p className="fine center">No timer while this panel is open. Pressures and leak rates are illustrative.</p>
       </Dialog>
     );
   }
 
   return (
-    <Dialog title="Main console" onClose={onClose}>
-      <p>Plan: <strong>{s.plan === 'seal_now' ? 'seal the lab hatch now' : 'rescue the experiment, then seal the hatch'}</strong>.</p>
-      <p>Air reserve {Math.round(s.reserve)}%. Experiment: {s.experiment === 'safe' ? 'safe in the transfer port' : 'still in the lab'}.</p>
-      <div className="row"><Btn autoFocus onClick={onClose}>Close</Btn></div>
+    <Dialog title="Main console" icon="list" kicker="Plan locked in" onClose={onClose}>
+      <p className="lead">Plan: <strong>{s.plan === 'seal_now' ? 'seal the lab hatch now' : 'rescue the experiment, then seal the hatch'}</strong>.</p>
+      <dl className="stat-tiles">
+        <div className="stat-tile"><dd>{Math.round(s.reserve)}%</dd><dt>Air reserve</dt></div>
+        <div className="stat-tile"><dd>{s.experiment === 'safe' ? 'Safe' : 'In the lab'}</dd><dt>Experiment</dt></div>
+      </dl>
+      <div className="dialog-actions"><Btn autoFocus size="lg" icon="check" onClick={onClose}>Got it</Btn></div>
     </Dialog>
   );
 }
@@ -555,6 +569,7 @@ export function ModuleAlertMission() {
         { label: 'Time with the leak open (compressed)', value: `${Math.round(end.t)} s` },
       ],
       outpost: null,
+      rating: rateAlert(end.wrongCalls, end.reserve, saved),
     }), 1500);
   };
 

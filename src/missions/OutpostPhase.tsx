@@ -10,6 +10,7 @@ import {
 } from '../sim/outpost';
 import { getScenario } from '../sim/outpostScenarios';
 import { hintsOn } from '../sim/save';
+import { rateOutpost } from '../sim/score';
 import { GameCanvas, useReducedMotion } from '../three/GameCanvas';
 import { M, Sign, Strut } from '../three/Props';
 import { ObjectiveMarker } from '../three/Scenery';
@@ -356,6 +357,7 @@ export function OutpostPhase({ missionId }: { missionId: 'L02' | 'M04' }) {
         ...(st.recoveries ? [{ label: 'Checkpoint recoveries', value: String(st.recoveries) }] : []),
       ],
       outpost,
+      rating: rateOutpost(r.air, st.recoveries ?? 0),
     });
   };
 

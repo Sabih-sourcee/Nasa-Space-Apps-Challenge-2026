@@ -26,6 +26,8 @@ interface Props {
   onInteract: (id: string) => void;
   onStep?: (s: WalkerState, dt: number) => void;
   carrying?: boolean;
+  /** What is in the astronaut's hands. Defaults to the equipment pouch. */
+  carried?: ReactNode;
   chestLight?: 'green' | 'red' | 'amber';
   gloveAlert?: boolean;
   /** Stop the astronaut (for example while a panel is open). */
@@ -40,7 +42,7 @@ interface Props {
  * position, which keeps the view stable for young players. Movement keys are
  * camera-relative: up walks away from the camera.
  */
-export function WalkerRig({ env, state, interactables, onInteract, onStep, carrying = false, chestLight, gloveAlert, frozen = false, cameraOffset = [0, 3.4, 8.2], lookHeight = 1.3, children }: Props) {
+export function WalkerRig({ env, state, interactables, onInteract, onStep, carrying = false, carried, chestLight, gloveAlert, frozen = false, cameraOffset = [0, 3.4, 8.2], lookHeight = 1.3, children }: Props) {
   const group = useRef<THREE.Group>(null);
   const anim = useRef(makeAnim('walk'));
   const { camera } = useThree();
@@ -111,7 +113,7 @@ export function WalkerRig({ env, state, interactables, onInteract, onStep, carry
 
   return (
     <Astronaut ref={group} anim={anim} chestLight={chestLight} gloveAlert={gloveAlert}>
-      {carrying && <group position={[0, 1.12, 0.42]}><Pouch /></group>}
+      {carrying && <group position={[0, 1.12, 0.42]}>{carried ?? <Pouch />}</group>}
       {children}
     </Astronaut>
   );

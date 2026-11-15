@@ -64,6 +64,8 @@ export const input = {
   held(a: Action): boolean {
     return !suspended && (keyHeld.has(a) || virtualHeld.has(a));
   },
+  /** True while any game key or on-screen button is still down. */
+  anyHeld: (): boolean => keyHeld.size > 0 || virtualHeld.size > 0,
   /** True once per press. */
   consume(a: Action): boolean {
     if (suspended) { pressed.delete(a); return false; }

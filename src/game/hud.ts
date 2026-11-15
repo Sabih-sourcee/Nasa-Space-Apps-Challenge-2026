@@ -31,7 +31,8 @@ export interface HudState {
   caption: string | null;
   labels: string[];
   touch: TouchLayout;
-  touchLabels: { primary: string; use: string; brake?: string; recover?: string };
+  /** Names for the action keys. `move` renames the W A S D keys (for example "Move arm"). */
+  touchLabels: { primary: string; use: string; brake?: string; recover?: string; move?: string };
   crosshair: boolean;
 }
 

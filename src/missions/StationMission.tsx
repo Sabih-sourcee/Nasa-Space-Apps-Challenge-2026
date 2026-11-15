@@ -9,6 +9,7 @@ import { useGame } from '../game/store';
 import { DOCK_TUNING, makeDock, retryDock, stepDock, type DockState } from '../sim/flight';
 import { makeDrifter, nearestRail, stepDrift, type DriftEnv, type DriftState } from '../sim/movement';
 import { hintsOn } from '../sim/save';
+import { rateStation } from '../sim/score';
 import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight, useReducedMotion, useSim } from '../three/GameCanvas';
@@ -21,7 +22,7 @@ import { ResetCard } from '../ui/Hud';
 // Phase 1: docking
 // ---------------------------------------------------------------------------
 
-function DockingScene({ sim, tier, onEnd }: { sim: React.MutableRefObject<DockState>; tier: Tier; onEnd: (s: DockState) => void }) {
+export function DockingScene({ sim, tier, onEnd }: { sim: React.MutableRefObject<DockState>; tier: Tier; onEnd: (s: DockState) => void }) {
   const m = M();
   const station = useRef<THREE.Group>(null);
   const { camera } = useThree();
@@ -402,6 +403,7 @@ export function StationMission() {
         { label: 'Tether recoveries', value: String(d.recoveries) },
       ],
       outpost: null,
+      rating: rateStation(attempts, d.recoveries),
     }), 1600);
   };
 

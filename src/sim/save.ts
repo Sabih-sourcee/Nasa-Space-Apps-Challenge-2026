@@ -10,13 +10,18 @@ import { PLAYABLE, SCHEMA_VERSION, isDemoMission, isTier, type DemoMissionId, ty
 export interface Settings {
   tier: Tier;
   reducedMotion: boolean;
+  /** Sound effects. */
   audio: boolean;
+  /** Spoken alerts (speech synthesis). Separate from sound effects. */
+  speech: boolean;
   captions: boolean;
   graphics: 'low' | 'high';
   hints: 'auto' | 'on' | 'off';
 }
 
-export interface MissionRecord { tier: Tier; completions: number; summary: string }
+/** `stars` is the best rating so far. Records saved before ratings existed have none. */
+/** `flags` are story facts later missions read, for example whether the spare battery was latched aboard the ship. */
+export interface MissionRecord { tier: Tier; completions: number; summary: string; stars?: 1 | 2 | 3; flags?: Record<string, boolean> }
 
 export interface Checkpoint {
   missionId: DemoMissionId;
@@ -37,7 +42,7 @@ export interface SaveData {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  tier: 'junior', reducedMotion: false, audio: false, captions: true, graphics: 'high', hints: 'auto',
+  tier: 'junior', reducedMotion: false, audio: true, speech: false, captions: true, graphics: 'high', hints: 'auto',
 };
 
 export function hintsOn(settings: Settings, tier: Tier): boolean {
@@ -57,10 +62,15 @@ function isObj(v: unknown): v is Record<string, unknown> {
 function parseSettings(v: unknown): Settings | null {
   if (!isObj(v)) return null;
   if (!isTier(v.tier)) return null;
+  // Saves written before sound effects and speech were split had one "audio"
+  // switch, off by default. Those players get the new default (effects on) and
+  // keep speech only if they had turned the old switch on.
+  const legacy = typeof v.speech !== 'boolean';
   return {
     tier: v.tier,
     reducedMotion: v.reducedMotion === true,
-    audio: v.audio === true,
+    audio: legacy ? true : v.audio === true,
+    speech: legacy ? v.audio === true : v.speech === true,
     captions: v.captions !== false,
     graphics: v.graphics === 'low' ? 'low' : 'high',
     hints: v.hints === 'on' || v.hints === 'off' ? v.hints : 'auto',
@@ -147,6 +157,8 @@ export function parseSave(raw: string | null, makeId: () => string): ParseResult
           tier: rec.tier,
           completions: typeof rec.completions === 'number' && rec.completions > 0 ? Math.floor(rec.completions) : 1,
           summary: typeof rec.summary === 'string' ? rec.summary : '',
+          ...(rec.stars === 1 || rec.stars === 2 || rec.stars === 3 ? { stars: rec.stars } : {}),
+          ...(isObj(rec.flags) ? { flags: Object.fromEntries(Object.entries(rec.flags).filter(([, f]) => typeof f === 'boolean')) as Record<string, boolean> } : {}),
         };
       }
     }

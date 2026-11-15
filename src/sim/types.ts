@@ -19,11 +19,11 @@ export type MissionId =
   | 'M01' | 'M02' | 'M03' | 'M04' | 'M05';
 
 /** Every mission that can be played. */
-export type DemoMissionId = 'E02' | 'F01' | 'S01' | 'S04' | 'L02' | 'M04';
+export type DemoMissionId = 'E02' | 'F01' | 'F03' | 'S01' | 'S04' | 'L02' | 'L03' | 'M04';
 /** The five-world campaign route: one mission per world, each unlocking the next. */
 export const DEMO_ROUTE: DemoMissionId[] = ['E02', 'F01', 'S01', 'L02', 'M04'];
-/** All playable missions in atlas order. S04 is an extra station mission off the main route. */
-export const PLAYABLE: DemoMissionId[] = ['E02', 'F01', 'S01', 'S04', 'L02', 'M04'];
+/** All playable missions in atlas order. F03, S04 and L03 are extra missions off the main route. */
+export const PLAYABLE: DemoMissionId[] = ['E02', 'F01', 'F03', 'S01', 'S04', 'L02', 'L03', 'M04'];
 
 export const SCHEMA_VERSION = 1;
 

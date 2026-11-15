@@ -1,185 +1,246 @@
 import { useState } from 'react';
 import { callSign, useGame } from '../game/store';
-import { CATALOG, DEMO_MISSIONS, STATUS_LABEL, WORLD_INFO, missionStatus, nextMission, type MissionStatus } from '../sim/missions';
+import { CATALOG, DEMO_MISSIONS, STATUS_LABEL, WORLD_INFO, missionStatus, nextMission, type CatalogEntry, type MissionStatus } from '../sim/missions';
 import { hintsOn } from '../sim/save';
+import { MAX_STARS, STAR_GOAL, rankFor, starsOf, totalStars } from '../sim/score';
 import { LABELS, SOURCES } from '../sim/sources';
-import { DEMO_ROUTE, PLAYABLE, TIER_LABEL, WORLDS, isDemoMission, type DemoMissionId, type WorldId } from '../sim/types';
-import { Btn, Dialog, SourceLink, TierPicker } from './common';
+import { DEMO_ROUTE, PLAYABLE, WORLDS, isDemoMission, type DemoMissionId, type WorldId } from '../sim/types';
+import { MissionPatch, WorldArt } from './art';
+import { MissionLog } from './Commander';
+import { Btn, Chip, ControlList, Dialog, IconBtn, SourceLink, Stars, TierPicker, Tile, Toggle } from './common';
+import { Icon } from './icons';
 
 // ---------------------------------------------------------------------------
-// Home
+// Shared pieces
+// ---------------------------------------------------------------------------
+
+/** Who is playing: call sign, rank and stars. No personal details, only the random guest id. */
+function Profile({ compact = false }: { compact?: boolean }) {
+  const save = useGame((s) => s.save);
+  const stars = totalStars(save.completed);
+  const rank = rankFor(stars);
+  const span = rank.next ? rank.next.at - rank.at : 1;
+  const into = rank.next ? stars - rank.at : 1;
+  return (
+    <div className={`profile ${compact ? 'compact' : ''}`}>
+      <span className="profile-avatar"><Icon name="helmet" size={compact ? 22 : 26} /></span>
+      <div className="profile-main">
+        <div className="profile-rank">{rank.title}</div>
+        {!compact && <div className="profile-name">{callSign(save.profileId)} · guest profile</div>}
+        {!compact && (
+          <div className="profile-next">
+            <span className="rank-bar" aria-hidden="true"><span style={{ width: `${Math.round((into / span) * 100)}%` }} /></span>
+            <span>{rank.next ? `${rank.next.at - stars} more ${rank.next.at - stars === 1 ? 'star' : 'stars'} to ${rank.next.title}` : 'Top rank reached'}</span>
+          </div>
+        )}
+      </div>
+      <div className="profile-stars" role="img" aria-label={`${stars} of ${MAX_STARS} stars`}>
+        <Icon name="star" size={compact ? 18 : 22} /><strong>{stars}</strong><small>/{MAX_STARS}</small>
+      </div>
+    </div>
+  );
+}
+
+function JudgeSwitch() {
+  const mode = useGame((s) => s.mode);
+  const setMode = useGame((s) => s.setMode);
+  return (
+    <label className={`judge-switch ${mode === 'judge' ? 'on' : ''}`} title="Opens every playable mission. Progress is saved separately.">
+      <input type="checkbox" checked={mode === 'judge'} onChange={(e) => setMode(e.target.checked ? 'judge' : 'campaign')} />
+      <Icon name="trophy" size={16} />
+      <span>Judge Mode {mode === 'judge' ? 'on' : 'off'}</span>
+    </label>
+  );
+}
+
+function SoundButton() {
+  const audio = useGame((s) => s.save.settings.audio);
+  const update = useGame((s) => s.updateSettings);
+  return <IconBtn icon={audio ? 'sound' : 'mute'} label={audio ? 'Sound on. Press to mute' : 'Sound off. Press to turn on'} pressed={audio} onClick={() => update({ audio: !audio })} />;
+}
+
+// ---------------------------------------------------------------------------
+// Title screen
 // ---------------------------------------------------------------------------
 
 export function Home() {
   const save = useGame((s) => s.save);
-  const mode = useGame((s) => s.mode);
   const go = useGame((s) => s.go);
   const startCampaign = useGame((s) => s.startCampaign);
   const resume = useGame((s) => s.resumeCheckpoint);
   const openSettings = useGame((s) => s.openSettings);
-  const setMode = useGame((s) => s.setMode);
   const done = PLAYABLE.filter((id) => save.completed[id]).length;
   const routeDone = DEMO_ROUTE.filter((id) => save.completed[id]).length;
   const cp = save.checkpoint;
   const next = nextMission(save.completed);
   const started = done > 0 || !!cp;
 
+  const cpDef = cp ? DEMO_MISSIONS[cp.missionId] : null;
+  const cpPhase = cp && cpDef ? cpDef.phases.find((p) => p.id === cp.phase) : null;
+  const play = !started ? { label: 'Play', note: 'Start astronaut training on Earth', act: startCampaign }
+    : cp && cpDef ? { label: 'Continue', note: `${cpDef.title} · checkpoint: ${cpPhase?.checkpoint ?? 'mission start'}`, act: () => { resume(); } }
+      : next ? { label: 'Continue', note: `Next mission: ${DEMO_MISSIONS[next].title}`, act: startCampaign }
+        : { label: 'Mission map', note: 'All five worlds complete. Go for three stars everywhere!', act: () => go('atlas') };
+
   return (
     <div className="home">
-      <div className="home-panel">
-        <h1 className="logo"><span>BEYOND</span> <span className="accent">EARTH</span></h1>
-        <p className="tagline">Train. Launch. Explore. Survive.</p>
-        <nav className="menu" aria-label="Main menu">
-          {!started && <Btn autoFocus onClick={startCampaign}>Start Training</Btn>}
-          {cp && (
-            <Btn autoFocus onClick={() => { resume(); }}>
-              Continue: {DEMO_MISSIONS[cp.missionId].title}
-            </Btn>
-          )}
-          {started && !cp && next && <Btn autoFocus onClick={startCampaign}>Continue Campaign</Btn>}
-          {started && !cp && !next && <Btn autoFocus onClick={() => go('atlas')}>Campaign complete: open the atlas</Btn>}
-          <Btn kind="ghost" onClick={() => go('atlas')}>Mission Atlas</Btn>
-          <Btn kind="ghost" onClick={() => openSettings(true)}>Settings</Btn>
-          <Btn kind="ghost" onClick={() => go('credits')}>Science and Credits</Btn>
-        </nav>
-        <TierPicker compact />
-        <p className="fine">Difficulty applies the next time a mission starts or restarts.</p>
-        <div className="home-foot">
-          <span>{callSign(save.profileId)} · guest profile · {done} of {PLAYABLE.length} missions complete ({routeDone} of 5 worlds)</span>
-          <label className="switch">
-            <input type="checkbox" checked={mode === 'judge'} onChange={(e) => setMode(e.target.checked ? 'judge' : 'campaign')} />
-            <span>Judge Mode (opens every playable mission, separate progress)</span>
-          </label>
+      <div className="home-top">
+        <Profile />
+        <div className="home-top-actions">
+          <SoundButton />
+          <IconBtn icon="gear" label="Settings" onClick={() => openSettings(true)} />
         </div>
+      </div>
+
+      <div className="home-main">
+        <div className="home-brand">
+          <MissionPatch size={88} />
+          <div>
+            <h1 className="logo"><span>Beyond</span> <span className="accent">Earth</span></h1>
+            <p className="tagline">Train · Launch · Explore · Survive</p>
+          </div>
+        </div>
+
+        <nav className="home-menu" aria-label="Main menu">
+          <Btn autoFocus size="xl" icon="play" cue="start" onClick={play.act}>{play.label}</Btn>
+          <p className="home-next">{play.note}</p>
+          <div className="tile-row">
+            <Tile icon="map" label="Missions" note={`${done} of ${PLAYABLE.length} done`} onClick={() => go('atlas')} />
+            <Tile icon="gear" label="Settings" note="Sound and comfort" onClick={() => openSettings(true)} />
+            <Tile icon="book" label="Science" note="What is real" onClick={() => go('credits')} />
+          </div>
+          <TierPicker compact />
+        </nav>
+      </div>
+
+      <div className="home-foot">
+        <JudgeSwitch />
+        <span className="fine">{routeDone} of 5 worlds visited · progress is saved in this browser only</span>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Mission Atlas
+// Mission map
 // ---------------------------------------------------------------------------
 
-const WORLD_POS: Record<WorldId, { x: number; y: number; r: number }> = {
-  earth: { x: 120, y: 190, r: 58 },
-  shuttle: { x: 330, y: 110, r: 22 },
-  station: { x: 530, y: 80, r: 30 },
-  moon: { x: 720, y: 170, r: 40 },
-  mars: { x: 900, y: 90, r: 46 },
-};
+const STATUS_ICON: Record<MissionStatus, string> = { completed: 'check', available: 'play', locked: 'lock', planned: 'clock' };
 
-const STATUS_ICON: Record<MissionStatus, string> = { completed: '✔', available: '▶', locked: '🔒', planned: '…' };
-
-function RouteMap({ worldDone }: { worldDone: Record<WorldId, boolean> }) {
-  const order = WORLDS.map((w) => WORLD_POS[w]);
-  const path = order.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+/** The route between worlds, drawn behind the planets. Finished legs turn gold. */
+function RoutePath({ worldDone }: { worldDone: Record<WorldId, boolean> }) {
+  const pts = WORLDS.map((_, i) => ({ x: 100 + i * 200, y: i % 2 === 0 ? 70 : 118 }));
   return (
-    <svg className="route" viewBox="0 0 1020 300" role="img" aria-label="Campaign route: Earth, Shuttle, Orbital Station, Moon, Mars">
-      <defs>
-        <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="3" seed="4" /><feColorMatrix type="saturate" values="0" /><feComposite in2="SourceGraphic" operator="in" /><feBlend in="SourceGraphic" mode="multiply" /></filter>
-        <radialGradient id="g-earth" cx="35%" cy="32%"><stop offset="0%" stopColor="#9fd6ff" /><stop offset="55%" stopColor="#2f77c4" /><stop offset="100%" stopColor="#0b2a5a" /></radialGradient>
-        <radialGradient id="g-moon" cx="35%" cy="32%"><stop offset="0%" stopColor="#f1f1ee" /><stop offset="60%" stopColor="#a3a29f" /><stop offset="100%" stopColor="#4b4a49" /></radialGradient>
-        <radialGradient id="g-mars" cx="35%" cy="32%"><stop offset="0%" stopColor="#f0a26c" /><stop offset="60%" stopColor="#b5522a" /><stop offset="100%" stopColor="#5a2412" /></radialGradient>
-      </defs>
-      <path d={path} className="route-line" />
-      <ellipse cx="120" cy="190" rx="96" ry="34" className="orbit-ring" transform="rotate(-18 120 190)" />
-      <circle cx={WORLD_POS.earth.x} cy={WORLD_POS.earth.y} r={WORLD_POS.earth.r} fill="url(#g-earth)" filter="url(#rough)" />
-      <g transform={`translate(${WORLD_POS.shuttle.x} ${WORLD_POS.shuttle.y}) rotate(-28)`}>
-        <rect x="-24" y="-7" width="40" height="14" rx="6" fill="#e8eaec" />
-        <path d="M16 -7 L30 0 L16 7 Z" fill="#e8eaec" /><path d="M-18 -7 L-6 -20 L6 -7 Z M-18 7 L-6 20 L6 7 Z" fill="#c4c8cc" />
-        <rect x="-28" y="-4" width="6" height="8" fill="#e23d3d" />
-      </g>
-      <g transform={`translate(${WORLD_POS.station.x} ${WORLD_POS.station.y})`}>
-        <rect x="-44" y="-3" width="88" height="6" fill="#9aa0a6" />
-        {[-40, -26, 14, 28].map((x) => <rect key={x} x={x} y="-24" width="12" height="48" fill="#1d3a7a" stroke="#b9c4d6" strokeWidth="1" />)}
-        <rect x="-10" y="-9" width="20" height="18" rx="4" fill="#e8eaec" />
-      </g>
-      <circle cx={WORLD_POS.moon.x} cy={WORLD_POS.moon.y} r={WORLD_POS.moon.r} fill="url(#g-moon)" filter="url(#rough)" />
-      <circle cx={WORLD_POS.mars.x} cy={WORLD_POS.mars.y} r={WORLD_POS.mars.r} fill="url(#g-mars)" filter="url(#rough)" />
-      {WORLDS.map((w) => {
-        const p = WORLD_POS[w];
-        return (
-          <g key={w}>
-            <text x={p.x} y={p.y + p.r + 26} className="route-label">{WORLD_INFO[w].label.toUpperCase()}</text>
-            <text x={p.x} y={p.y + p.r + 44} className="route-sub">{worldDone[w] ? 'Playable mission complete' : WORLD_INFO[w].blurb}</text>
-          </g>
-        );
+    <svg className="map-path" viewBox="0 0 1000 190" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      {pts.slice(0, -1).map((a, i) => {
+        const b = pts[i + 1];
+        const mid = (a.x + b.x) / 2;
+        return <path key={i} d={`M${a.x} ${a.y} C ${mid} ${a.y}, ${mid} ${b.y}, ${b.x} ${b.y}`} className={worldDone[WORLDS[i]] ? 'done' : ''} vectorEffect="non-scaling-stroke" />;
       })}
     </svg>
   );
+}
+
+function MissionNode({ m, status, isNext }: { m: CatalogEntry; status: MissionStatus; isNext: boolean }) {
+  const save = useGame((s) => s.save);
+  const openBriefing = useGame((s) => s.openBriefing);
+  const playable = (status === 'available' || status === 'completed') && isDemoMission(m.id);
+  const stars = starsOf(save.completed[m.id]);
+  const body = (
+    <>
+      <span className="node-badge"><Icon name={STATUS_ICON[status]} size={status === 'planned' ? 18 : 22} /></span>
+      <span className="node-main">
+        <span className="node-top">
+          <span className="node-id">{m.id}</span>
+          <span className={`node-status ${status}`}>{isNext ? 'Up next' : STATUS_LABEL[status]}</span>
+        </span>
+        <span className="node-title">{m.title}</span>
+        {status === 'locked' && isDemoMission(m.id)
+          ? <span className="node-note">Finish {DEMO_MISSIONS[DEMO_MISSIONS[m.id].requires ?? 'E02'].title} to unlock.</span>
+          : status === 'planned'
+            ? <span className="node-note">{m.task} Planned for the full campaign.</span>
+            : <span className="node-note">{m.task}</span>}
+        {playable && <Stars value={stars} size={17} />}
+      </span>
+    </>
+  );
+  return playable
+    ? <button type="button" className={`node ${status} ${isNext ? 'next' : ''}`} onClick={() => openBriefing(m.id as DemoMissionId)}>{body}</button>
+    : <div className={`node ${status}`} aria-disabled="true">{body}</div>;
 }
 
 export function Atlas() {
   const save = useGame((s) => s.save);
   const mode = useGame((s) => s.mode);
   const go = useGame((s) => s.go);
-  const openBriefing = useGame((s) => s.openBriefing);
-  const setMode = useGame((s) => s.setMode);
+  const [all, setAll] = useState(false);
+  const [log, setLog] = useState(false);
   const judge = mode === 'judge';
   const worldDone = Object.fromEntries(WORLDS.map((w) => [w, CATALOG.some((m) => m.world === w && m.demo && save.completed[m.id])])) as Record<WorldId, boolean>;
   const milestones = Object.values(DEMO_MISSIONS).map((m) => m.milestone).filter((m): m is { id: string; label: string } => !!m);
+  const next = nextMission(save.completed);
 
   return (
-    <div className="screen atlas">
-      <header className="screen-head">
-        <div>
+    <div className="screen map-screen">
+      <header className="top-bar">
+        <IconBtn icon="back" label="Back to the title screen" onClick={() => go('home')} />
+        <div className="top-title">
           <div className="kicker">Mission Control</div>
-          <h1>Mission Atlas</h1>
+          <h1>Mission Map</h1>
         </div>
-        <div className="head-actions">
-          <label className="switch">
-            <input type="checkbox" checked={judge} onChange={(e) => setMode(e.target.checked ? 'judge' : 'campaign')} />
-            <span>Judge Mode</span>
-          </label>
-          <Btn kind="ghost" onClick={() => go('home')}>Home</Btn>
+        <div className="top-right">
+          <Btn kind="ghost" size="sm" icon="book" onClick={() => setLog(true)}>Mission Log</Btn>
+          <JudgeSwitch />
+          <Profile compact />
         </div>
       </header>
-      {judge && <p className="banner">Judge Mode is on. Every playable mission is open. Progress here is saved separately from the campaign.</p>}
-      <RouteMap worldDone={worldDone} />
-      <div className="milestones" aria-label="Certification milestones">
-        {milestones.map((m) => {
-          const earned = save.milestones.includes(m.id);
-          return <span key={m.id} className={`milestone ${earned ? 'earned' : ''}`}>{earned ? '★' : '☆'} {m.label}: {earned ? 'earned' : 'not yet earned'}</span>;
+
+      {judge && <p className="banner"><Icon name="trophy" size={18} /> Judge Mode is on. Every playable mission is open. Progress here is saved separately from the campaign.</p>}
+
+      <div className="map">
+        <RoutePath worldDone={worldDone} />
+        {WORLDS.map((w, i) => {
+          const missions = CATALOG.filter((m) => m.world === w);
+          const shown = missions.filter((m) => all || m.demo);
+          const planned = missions.length - missions.filter((m) => m.demo).length;
+          return (
+            <section key={w} className={`world ${i % 2 === 1 ? 'low' : ''} ${worldDone[w] ? 'done' : ''}`} aria-label={WORLD_INFO[w].label}>
+              <div className="world-art-wrap"><WorldArt world={w} size={140} /></div>
+              <h2 className="world-name">{WORLD_INFO[w].label}</h2>
+              <p className="world-blurb">{WORLD_INFO[w].blurb}</p>
+              <ul className="nodes">
+                {shown.map((m) => (
+                  <li key={m.id}><MissionNode m={m} status={missionStatus(m.id, save.completed, judge)} isNext={m.id === next && !save.completed[m.id]} /></li>
+                ))}
+              </ul>
+              {!all && planned > 0 && <p className="world-more">+{planned} more planned</p>}
+            </section>
+          );
         })}
       </div>
-      <div className="worlds">
-        {WORLDS.map((w) => (
-          <section key={w} className="world-col" aria-label={WORLD_INFO[w].label}>
-            <h2>{WORLD_INFO[w].label}</h2>
-            <ul>
-              {CATALOG.filter((m) => m.world === w).map((m) => {
-                const status = missionStatus(m.id, save.completed, judge);
-                const playable = status === 'available' || status === 'completed';
-                const body = (
-                  <>
-                    <span className="chip-top">
-                      <span className="chip-id">{m.id}</span>
-                      <span className={`chip-status ${status}`}><span aria-hidden="true">{STATUS_ICON[status]}</span> {STATUS_LABEL[status]}</span>
-                    </span>
-                    <span className="chip-title">{m.title}</span>
-                    <span className="chip-task">{m.task}</span>
-                    {status === 'locked' && isDemoMission(m.id) && <span className="chip-note">Complete {DEMO_MISSIONS[DEMO_MISSIONS[m.id].requires ?? 'E02'].title} to unlock.</span>}
-                    {status === 'planned' && <span className="chip-note">Planned for the full campaign. Not in this prototype.</span>}
-                  </>
-                );
-                return (
-                  <li key={m.id}>
-                    {playable && isDemoMission(m.id)
-                      ? <button type="button" className={`chip ${status}`} onClick={() => openBriefing(m.id as DemoMissionId)}>{body}</button>
-                      : <div className={`chip ${status}`} aria-disabled="true">{body}</div>}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
-      </div>
+
+      {log && <MissionLog onClose={() => setLog(false)} />}
+
+      <footer className="map-foot">
+        <div className="badges" aria-label="Badges">
+          {milestones.map((m) => {
+            const earned = save.milestones.includes(m.id);
+            return (
+              <span key={m.id} className={`badge ${earned ? 'earned' : ''}`}>
+                <Icon name="medal" size={22} />
+                <span><strong>{m.label}</strong><small>{earned ? 'Badge earned' : 'Not yet earned'}</small></span>
+              </span>
+            );
+          })}
+        </div>
+        <Btn kind="ghost" size="sm" icon="list" onClick={() => setAll(!all)}>{all ? 'Show playable missions only' : `Show all ${CATALOG.length} missions`}</Btn>
+      </footer>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Briefing
+// Mission card
 // ---------------------------------------------------------------------------
 
 export function Briefing() {
@@ -197,55 +258,81 @@ export function Briefing() {
   const cp = save.checkpoint && save.checkpoint.missionId === id ? save.checkpoint : null;
   const cpPhase = cp ? def.phases.find((p) => p.id === cp.phase) : null;
   const hints = hintsOn(save.settings, tier);
+  const record = save.completed[id];
+  const best = starsOf(record);
   return (
-    <div className="screen briefing">
-      <header className="screen-head">
-        <div>
-          <div className="kicker">{WORLD_INFO[def.world].label} · You are the {def.duty.toLowerCase()}</div>
+    <div className={`screen brief-screen world-${def.world}`}>
+      <header className="top-bar">
+        <IconBtn icon="back" label="Back to the mission map" onClick={() => go('atlas')} />
+        <div className="top-title">
+          <div className="kicker">{WORLD_INFO[def.world].label} · Mission {def.id}</div>
           <h1>{def.title}</h1>
         </div>
-        <div className="head-actions"><Btn kind="ghost" onClick={() => go('atlas')}>Mission Atlas</Btn></div>
+        <div className="top-right"><Profile compact /></div>
       </header>
-      <div className="brief-simple">
-        <section className="card brief-main">
-          <p className="brief-goal">{def.goal}</p>
-          <ol className="brief-steps">
-            {def.phases.map((p, i) => <li key={p.id}><span className="step-num">{i + 1}</span><span><strong>{p.label}</strong><br />{p.objective}</span></li>)}
+
+      <div className="brief">
+        <section className="panel brief-main">
+          <div className="brief-hero">
+            <WorldArt world={def.world} size={132} />
+            <div className="brief-hero-text">
+              <Chip icon="helmet" tone="cyan">You are the {def.duty.toLowerCase()}</Chip>
+              <p className="brief-goal">{def.goal}</p>
+              <div className="brief-best">
+                <Stars value={best} size={24} />
+                <span>{record ? `Your best · flown ${record.completions} ${record.completions === 1 ? 'time' : 'times'}` : 'Not flown yet'}</span>
+              </div>
+              <p className="star-goal"><Icon name="star" size={16} /><span><strong>3-star goal:</strong> {STAR_GOAL[id]}</span></p>
+            </div>
+          </div>
+
+          <h2 className="mini-head"><Icon name="flag" size={16} /> Your mission</h2>
+          <ol className="steps-row">
+            {def.phases.map((p, i) => (
+              <li key={p.id} className="step-card">
+                <span className="step-num">{i + 1}</span>
+                <span className="step-text"><strong>{p.label}</strong><span>{p.objective}</span></span>
+              </li>
+            ))}
           </ol>
-          <h2>Controls</h2>
-          <ul className="key-list">{def.controls.map((c) => {
-            const cut = c.indexOf(':');
-            return <li key={c}><span>{cut < 0 ? c : c.slice(0, cut)}</span>{cut >= 0 && <kbd>{c.slice(cut + 1).trim()}</kbd>}</li>;
-          })}</ul>
+
+          <h2 className="mini-head"><Icon name="keyboard" size={16} /> Controls</h2>
+          <ControlList controls={def.controls} />
+
           <details className="more">
-            <summary>Science and details</summary>
-            <p><strong>Skill:</strong> {def.skill}</p>
-            <p><strong>You start with:</strong> {def.startingResources}</p>
+            <summary><Icon name="flask" size={16} /> The science behind this mission</summary>
             <p>{def.science.text}</p>
             <p><SourceLink id={def.science.sourceId} /></p>
+            <p><strong>Skill:</strong> {def.skill}</p>
+            <p><strong>You start with:</strong> {def.startingResources}</p>
             <p className="labels">{def.labels.join(' · ')}</p>
           </details>
         </section>
-        <section className="card brief-side">
-          <TierPicker compact />
+
+        <aside className="panel brief-go">
+          <TierPicker />
           <p className="tier-detail">{def.tiers[tier]}</p>
-          <label className="switch">
-            <input type="checkbox" checked={hints} onChange={(e) => update({ hints: e.target.checked ? 'on' : 'off' })} />
-            <span>Tips {hints ? 'on' : 'off'}</span>
-          </label>
-          <div className="stack">
-            {cp && cpPhase && <Btn autoFocus onClick={() => { resume(); }}>Continue from: {cpPhase.checkpoint}</Btn>}
-            <Btn autoFocus={!cp} kind={cp ? 'ghost' : 'primary'} onClick={() => start(id)}>{cp ? 'Start over' : 'Start mission'}</Btn>
+          <Toggle icon="bulb" label="Tips" note="Mission Control tells you what to try next." checked={hints} onChange={(on) => update({ hints: on ? 'on' : 'off' })} />
+          <div className="brief-actions">
+            {cp && cpPhase && (
+              <>
+                <Btn autoFocus size="xl" block icon="play" cue="start" onClick={() => { resume(); }}>Continue</Btn>
+                <p className="fine center">From checkpoint: {cpPhase.checkpoint}</p>
+              </>
+            )}
+            <Btn autoFocus={!cp} kind={cp ? 'ghost' : 'primary'} size={cp ? 'md' : 'xl'} block icon={cp ? 'replay' : 'rocket'} cue="start" onClick={() => start(id)}>
+              {cp ? 'Start over' : 'Start mission'}
+            </Btn>
           </div>
           {mode === 'judge' && def.phases.length > 1 && (
-            <details className="more judge-jump" open>
-              <summary>Judge Mode: jump ahead</summary>
+            <div className="judge-jump">
+              <h3 className="mini-head"><Icon name="trophy" size={16} /> Judge Mode: jump ahead</h3>
               <div className="stack">
-                {def.phases.slice(1).map((p) => <Btn key={p.id} kind="ghost" onClick={() => startAt(id, p.id)}>Start at: {p.label}</Btn>)}
+                {def.phases.slice(1).map((p) => <Btn key={p.id} kind="ghost" size="sm" block icon="arrow" onClick={() => startAt(id, p.id)}>Start at: {p.label}</Btn>)}
               </div>
-            </details>
+            </div>
           )}
-        </section>
+        </aside>
       </div>
     </div>
   );
@@ -264,49 +351,42 @@ export function SettingsDialog() {
   const mode = useGame((s) => s.mode);
   const [confirm, setConfirm] = useState(false);
   if (!open) return null;
-  const toggle = (key: 'reducedMotion' | 'audio' | 'captions', label: string, note: string) => (
-    <label className="switch block">
-      <input type="checkbox" checked={settings[key]} onChange={(e) => update({ [key]: e.target.checked })} />
-      <span><strong>{label}</strong><br /><small>{note}</small></span>
-    </label>
-  );
+  const done = () => { setConfirm(false); close(false); };
   return (
-    <Dialog title="Settings" onClose={() => { setConfirm(false); close(false); }} wide>
+    <Dialog title="Settings" icon="gear" onClose={done} wide>
       <div className="settings-grid">
-        <div>
+        <section>
+          <h3 className="mini-head"><Icon name="rocket" size={16} /> Game</h3>
           <TierPicker />
-          <p className="fine">Applies to the next mission start or restart.</p>
-          <label className="switch block">
-            <input type="checkbox" checked={settings.hints !== 'off' && (settings.hints === 'on' || settings.tier === 'junior')}
-              onChange={(e) => update({ hints: e.target.checked ? 'on' : 'off' })} />
-            <span><strong>Hints</strong><br /><small>On by default for Junior. Optional for Middle and Advanced.</small></span>
-          </label>
-        </div>
-        <div>
-          {toggle('reducedMotion', 'Reduced motion', 'Fixed camera, no shake, no flashing or bobbing.')}
-          {toggle('audio', 'Sound and spoken alerts', 'Off by default. The whole game can be played muted.')}
-          {toggle('captions', 'Captions', 'Show spoken alerts as text.')}
-          <label className="switch block">
-            <input type="checkbox" checked={settings.graphics === 'low'} onChange={(e) => update({ graphics: e.target.checked ? 'low' : 'high' })} />
-            <span><strong>Low graphics preset</strong><br /><small>No shadows, lower resolution. Use this if the picture stutters.</small></span>
-          </label>
-        </div>
+          <p className="fine">Difficulty applies the next time a mission starts or restarts.</p>
+          <Toggle icon="bulb" label="Tips" note="On by default for Junior. Optional for Middle and Advanced."
+            checked={hintsOn(settings, settings.tier)} onChange={(on) => update({ hints: on ? 'on' : 'off' })} />
+          <h3 className="mini-head"><Icon name="eye" size={16} /> Comfort</h3>
+          <Toggle icon="eye" label="Reduced motion" note="Fixed camera, no shake, no flashing or bobbing." checked={settings.reducedMotion} onChange={(on) => update({ reducedMotion: on })} />
+          <Toggle icon="sparkle" label="Low graphics" note="No shadows, lower resolution. Use this if the picture stutters." checked={settings.graphics === 'low'} onChange={(on) => update({ graphics: on ? 'low' : 'high' })} />
+        </section>
+        <section>
+          <h3 className="mini-head"><Icon name="sound" size={16} /> Sound</h3>
+          <Toggle icon="sound" label="Sound effects" note="Clicks, alerts and rewards. The whole game can be played muted." checked={settings.audio} onChange={(on) => update({ audio: on })} />
+          <Toggle icon="headset" label="Spoken alerts" note="Reads warnings and radio calls aloud. Off by default." checked={settings.speech} onChange={(on) => update({ speech: on })} />
+          <Toggle icon="list" label="Captions" note="Show radio calls and spoken alerts as text." checked={settings.captions} onChange={(on) => update({ captions: on })} />
+          <div className="danger-zone">
+            {!confirm
+              ? <Btn kind="danger" size="sm" icon="warning" onClick={() => setConfirm(true)}>Reset Progress</Btn>
+              : (
+                <div role="alertdialog" aria-label="Confirm reset">
+                  <p><strong>Reset {mode === 'judge' ? 'Judge Mode' : 'campaign'} progress?</strong> Completed missions, stars, badges and the saved checkpoint will be erased. This cannot be undone.</p>
+                  <div className="row">
+                    <Btn kind="danger" size="sm" onClick={() => { reset(); done(); }}>Yes, erase progress</Btn>
+                    <Btn kind="ghost" size="sm" onClick={() => setConfirm(false)}>Keep my progress</Btn>
+                  </div>
+                </div>
+              )}
+          </div>
+        </section>
       </div>
-      <div className="danger-zone">
-        {!confirm
-          ? <Btn kind="danger" onClick={() => setConfirm(true)}>Reset Progress</Btn>
-          : (
-            <div role="alertdialog" aria-label="Confirm reset">
-              <p><strong>Reset {mode === 'judge' ? 'Judge Mode' : 'campaign'} progress?</strong> Completed missions, milestones and the saved checkpoint will be erased. This cannot be undone.</p>
-              <div className="row">
-                <Btn kind="danger" onClick={() => { reset(); setConfirm(false); close(false); }}>Yes, erase progress</Btn>
-                <Btn kind="ghost" onClick={() => setConfirm(false)}>Keep my progress</Btn>
-              </div>
-            </div>
-          )}
-      </div>
-      <div className="stack"><Btn autoFocus onClick={() => { setConfirm(false); close(false); }}>Done</Btn></div>
-      <p className="fine">Progress is stored only in this browser. The game does not ask for or collect names, emails or other personal details.</p>
+      <div className="dialog-actions"><Btn autoFocus size="lg" icon="check" onClick={done}>Done</Btn></div>
+      <p className="fine center">Progress is stored only in this browser. The game does not ask for or collect names, emails or other personal details.</p>
     </Dialog>
   );
 }
@@ -319,43 +399,48 @@ export function Credits() {
   const go = useGame((s) => s.go);
   return (
     <div className="screen credits">
-      <header className="screen-head">
-        <div><div className="kicker">Science Center</div><h1>Science and Credits</h1></div>
-        <div className="head-actions"><Btn kind="ghost" autoFocus onClick={() => go('home')}>Home</Btn></div>
+      <header className="top-bar">
+        <IconBtn icon="back" label="Back to the title screen" autoFocus onClick={() => go('home')} />
+        <div className="top-title"><div className="kicker">Science Center</div><h1>Science and Credits</h1></div>
       </header>
-      <section className="card">
-        <h2>What is real and what is invented</h2>
-        <ul>
-          <li><strong>Real, sourced:</strong> gravity on the Moon and Mars, why astronauts float in orbit, why crews shelter during solar particle events, signal delay to the Moon and Mars, the thin Martian atmosphere.</li>
-          <li><strong>Archived record:</strong> the lunar solar alert is labelled with a dated NASA DONKI alert. {LABELS.archived}</li>
-          <li><strong>Compressed time:</strong> launches, landings and outpost shifts are shortened so a mission fits in a few minutes.</li>
-          <li><strong>Invented game values:</strong> energy units, crop stages, fuel budgets, the Air comfort score and every vehicle, station and habitat.</li>
-        </ul>
-      </section>
-      <section className="card">
-        <h2>Sources</h2>
-        <table className="sources">
-          <thead><tr><th>Source</th><th>What the game uses</th><th>What the game simplifies or invents</th></tr></thead>
-          <tbody>
-            {SOURCES.map((s) => (
-              <tr key={s.id}>
-                <td><SourceLink id={s.id} /></td>
-                <td>{s.use}</td>
-                <td>{s.simplified}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-      <section className="card">
-        <h2>Assets and code</h2>
-        <ul>
-          <li>All 3D models, textures, sounds and the Beyond Earth mission patch are generated in code for this project. No third-party models, images or audio files are included.</li>
-          <li>No NASA insignia or national flags are used. Beyond Earth is a student hackathon project and is not endorsed by NASA.</li>
-          <li>Open-source libraries: React, React DOM, three.js, React Three Fiber and Zustand (all MIT licensed). Built with Vite and TypeScript.</li>
-          <li>The game works offline once loaded. It makes no network requests while you play.</li>
-        </ul>
-      </section>
+      <div className="credits-body">
+        <section className="panel">
+          <h2 className="mini-head"><Icon name="flask" size={16} /> What is real and what is invented</h2>
+          <ul className="real-list">
+            <li><Chip tone="good" icon="check">Real, sourced</Chip> Gravity on the Moon and Mars, why astronauts float in orbit, why crews shelter during solar particle events, signal delay to the Moon and Mars, the thin Martian atmosphere.</li>
+            <li><Chip tone="cyan" icon="book">Archived record</Chip> The lunar solar alert is labelled with a dated NASA DONKI alert. {LABELS.archived}</li>
+            <li><Chip tone="amber" icon="clock">Compressed time</Chip> Launches, landings and outpost shifts are shortened so a mission fits in a few minutes.</li>
+            <li><Chip tone="amber" icon="sparkle">Invented game values</Chip> Energy units, crop stages, fuel budgets, star ratings, the Air comfort score and every vehicle, station and habitat.</li>
+          </ul>
+        </section>
+        <section className="panel">
+          <h2 className="mini-head"><Icon name="book" size={16} /> Sources</h2>
+          <div className="table-wrap">
+            <table className="sources">
+              <thead><tr><th>Source</th><th>What the game uses</th><th>What the game simplifies or invents</th></tr></thead>
+              <tbody>
+                {SOURCES.map((s) => (
+                  <tr key={s.id}>
+                    <td><SourceLink id={s.id} /></td>
+                    <td>{s.use}</td>
+                    <td>{s.simplified}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section className="panel">
+          <h2 className="mini-head"><Icon name="gear" size={16} /> Assets and code</h2>
+          <ul>
+            <li>All 3D models, textures, sounds, icons, planet art and the Beyond Earth mission patch are generated in code for this project. No third-party models, images or audio files are included.</li>
+            <li>Typeface: Exo 2, copyright The Exo 2 Project Authors, used under the SIL Open Font License 1.1 and bundled with the game.</li>
+            <li>No NASA insignia or national flags are used. Beyond Earth is a student hackathon project and is not endorsed by NASA.</li>
+            <li>Open-source libraries: React, React DOM, three.js, React Three Fiber and Zustand (all MIT licensed). Built with Vite and TypeScript.</li>
+            <li>The game works offline once loaded. It makes no network requests while you play.</li>
+          </ul>
+        </section>
+      </div>
     </div>
   );
 }

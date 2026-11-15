@@ -93,7 +93,7 @@ describe('FR-08 corrupt or incompatible saves', () => {
 });
 
 describe('campaign catalog and progression', () => {
-  it('lists 20 missions across five worlds, six of them playable', () => {
+  it('lists 20 missions across five worlds, eight of them playable', () => {
     expect(CATALOG.length).toBe(20);
     expect(new Set(CATALOG.map((m) => m.world)).size).toBe(5);
     expect(CATALOG.filter((m) => m.demo).map((m) => m.id)).toEqual(PLAYABLE);
