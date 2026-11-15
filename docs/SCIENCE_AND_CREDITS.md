@@ -31,7 +31,7 @@
 
 ## Assets
 
-- **3D models, textures and sounds:** generated in code in `src/three/` and `src/game/audio.ts`.
+- **3D models, textures and sounds:** generated in code in `src/three/` and `src/game/audio.ts`, except the two NASA vehicles listed below.
 - **Interface icons, the shuttle and station line drawings, the Commander portrait and the Beyond Earth patch:** drawn in code as inline SVG in `src/ui/icons.tsx` and `src/ui/art.tsx`. The Earth, Moon and Mars plates on the menus show the NASA maps listed below.
 - **Fonts:** all three use the SIL Open Font License 1.1, come from `@fontsource-variable` npm packages and are bundled into the build, so nothing is downloaded while playing. The licence texts are in each package's `LICENSE` file under `node_modules/@fontsource-variable/`.
   - Space Grotesk, copyright The Space Grotesk Project Authors. Headings.
@@ -44,6 +44,9 @@
 - **Four derived NASA ground textures** in `public/textures/`, made 15 November 2026 from the sources below. Each is a cropped region of real surface imagery, mirror-blended at the edges so it tiles without seams, contrast-balanced, and tinted to the game's palette; the `_relief` variants are luminance maps of the same crop, used for roughness and sparkle. The colour detail the player walks on is genuine spacecraft photography.
   - `moon_ground.jpg` and `moon_relief.jpg`: derived from `lroc_color_2k.jpg`, "CGI Moon Kit", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/4720/ (Lunar Reconnaissance Orbiter Camera data). Ground of the Moon missions (Power Before Shadow, The Last Battery).
   - `mars_ground.jpg` and `mars_relief.jpg`: derived from the Mars Viking MDIM21 colour mosaic (232 m/px), served as map tiles by NASA Mars Trek, https://trek.nasa.gov/mars/ (tile endpoint `trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m`). Ground of the Mars mission (Dust Storm Outpost).
+- **Two NASA 3D models** in `public/models/`, from NASA 3D Resources, https://science.nasa.gov/3d-resources/ (mirror https://github.com/nasa/NASA-3D-Resources), downloaded 15 November 2026. They are Draco-compressed glTF binaries, read at runtime with the Google Draco decoder (Apache-2.0, `public/draco/`). If a model cannot be loaded, the code-drawn vehicle takes its place, so play never breaks.
+  - `lm.glb`: "Apollo Lunar Module". Stands on the Moon in Power Before Shadow. Two small changes: the US flag and "UNITED STATES" decals on the descent stage were painted over with the same gold as the surrounding panels, to keep the project's no-flags rule; nothing else was touched.
+  - `perseverance.glb`: "Mars 2020 Perseverance Rover" (NASA / JPL-Caltech). The rover inspected in Dust Storm Outpost. Used as published, including the rover's real JPL wordmark.
 - The clouds, the painted fallback ground shown if a texture file is missing, and everything else are still drawn in code.
 - **No other third-party models, images or audio files.**
 - **No NASA insignia and no flags.** Beyond Earth is a hackathon project and is not endorsed by NASA.
