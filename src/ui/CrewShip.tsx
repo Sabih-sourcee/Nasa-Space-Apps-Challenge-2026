@@ -10,6 +10,7 @@ import {
   INCIDENTS, INCIDENT_BY_ID, ITEM_LABEL, RES_NAME, RES_UNIT, ROLES, ROLE_LABEL, ROOM_BY_ID,
   type CrewCarry, type IncidentId, type ItemId, type Res, type Role,
 } from '../sim/crewData';
+import { GLOSSARY, TOUR_SPOTS } from '../sim/shipTour';
 import { COMMANDER } from '../sim/story';
 import { TIERS, TIER_LABEL, type Tier } from '../sim/types';
 import { GameCanvas } from '../three/GameCanvas';
@@ -70,6 +71,7 @@ function Entry() {
           <h2>Solo training</h2>
           <p>Fly the same ship alone. Three scripted crew members work their own stations and leave the decisions to you. Works offline.</p>
           <Btn kind="good" size="lg" block icon="play" onClick={() => crew.solo(carry)}>Solo training</Btn>
+          <Btn kind="blue" block icon="eye" onClick={() => { crew.solo(carry); void (async () => { const c = useCrew.getState(); await c.act({ type: 'setup', incident: 'tour', tier: 'junior' }); await c.act({ type: 'start' }); await c.act({ type: 'briefed' }); })(); }}>3D ship tour</Btn>
         </section>
       </div>
       {crew.error && <p className="error center" role="alert"><Icon name="warning" size={18} /> {crew.error}</p>}
@@ -308,6 +310,37 @@ function TaskPanel({ task, onClose }: { task: LiveTask; onClose: () => void }) {
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// Ship tour: what a piece of equipment is, and the word a real crew uses for it
+// ---------------------------------------------------------------------------
+
+function InfoCard({ id, onClose }: { id: string; onClose: () => void }) {
+  const spot = TOUR_SPOTS.find((s) => s.id === id);
+  if (!spot) return null;
+  return (
+    <Dialog title={spot.name} icon="info" kicker={`${ROOM_BY_ID[spot.room].name} · ship tour`} onClose={onClose}>
+      <p className="lead">{spot.what}</p>
+      <Comm name="How it is used" tone="tip">{spot.use}</Comm>
+      <div className="term-card"><span className="term-word">{spot.term}</span><p>{spot.meaning}</p><p><SourceLink id={spot.sourceId} /></p></div>
+      <div className="dialog-actions"><Btn autoFocus size="lg" icon="check" onClick={onClose}>Got it</Btn></div>
+      <p className="fine center">The Kestrel is an invented ship. The explanation is how real spacecraft work, in plain words.</p>
+    </Dialog>
+  );
+}
+
+function Glossary({ onClose }: { onClose: () => void }) {
+  return (
+    <Dialog title="Words to know" icon="book" kicker={`${GLOSSARY.length} terms a crew uses`} onClose={onClose} wide>
+      <p className="lead">Each word belongs to something on the ship. Find it on the tour and click it.</p>
+      <dl className="glossary">
+        {GLOSSARY.map((g) => <div key={g.term}><dt>{g.term}</dt><dd>{g.meaning}<small>On the ship: {g.where}</small></dd></div>)}
+      </dl>
+      <div className="dialog-actions"><Btn autoFocus icon="check" onClick={onClose}>Done</Btn></div>
+    </Dialog>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // In the ship
 // ---------------------------------------------------------------------------
@@ -317,6 +350,9 @@ function Ship({ s }: { s: CrewSession }) {
   const prompt = useHud((h) => h.prompt);
   const [open, setOpen] = useState<string | null>(null);
   const [calls, setCalls] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+  const [words, setWords] = useState(false);
+  const [seen, setSeen] = useState<string[]>([]);
   const st = s.state;
   const spec = INCIDENT_BY_ID[s.incident];
   const tasks = st ? liveTasks(st) : [];
@@ -325,7 +361,8 @@ function Ship({ s }: { s: CrewSession }) {
   const len = spec.shiftLen[s.tier];
 
   const onUse = (u: ShipUse) => {
-    if (u.kind === 'task') { playCue('click'); setOpen(u.id); }
+    if (u.kind === 'info') { playCue('click'); setInfo(u.id); setSeen((v) => (v.includes(u.id) ? v : [...v, u.id])); }
+    else if (u.kind === 'task') { playCue('click'); setOpen(u.id); }
     else if (u.kind === 'pickup') void crew.act({ type: 'pickup', item: u.id });
     else if (u.kind === 'deliver') void crew.act({ type: 'deliver' });
     else void crew.act({ type: 'endShift' });
@@ -338,7 +375,7 @@ function Ship({ s }: { s: CrewSession }) {
   return (
     <div className="mission crew-ship">
       <GameCanvas fov={46} envIntensity={0.45} background="#03050b">
-        <CrewShipScene onUse={onUse} frozen={!!open} />
+        <CrewShipScene onUse={onUse} frozen={!!open || !!info || words} />
       </GameCanvas>
 
       <div className="hud">
@@ -356,7 +393,8 @@ function Ship({ s }: { s: CrewSession }) {
                       <span>{t.spec.title} <small>· {ROOM_BY_ID[t.spec.room].name}{t.optional ? ' · a choice' : ''}</small></span>
                     </li>
                   ))}
-                  {s.incident === 'tour' && <li className="open"><Icon name="play" size={13} /><span>Try any glowing station. {st.done.length} of 18 drills tried.</span></li>}
+                  {s.incident === 'tour' && <li className="open"><Icon name="info" size={13} /><span>Click any equipment, or walk up to a blue marker and press E. {seen.length} of {TOUR_SPOTS.length} seen.</span></li>}
+                  {s.incident === 'tour' && <li className="open"><Icon name="play" size={13} /><span>Gold stations are short drills. {st.done.length} of 18 tried.</span></li>}
                 </ul>
               </div>
             </section>
@@ -371,6 +409,7 @@ function Ship({ s }: { s: CrewSession }) {
 
           <section className="hud-right">
             <div className="hud-buttons">
+              <IconBtn icon="book" label="Words to know" onClick={() => setWords(true)} />
               <IconBtn icon="headset" label="Crew calls" pressed={calls} onClick={() => setCalls(!calls)} />
               {host && <IconBtn icon="flag" label="End the mission now (host)" onClick={() => { void crew.act({ type: 'end' }); }} />}
               <IconBtn icon="x" label="Leave the crew" kind="gold" onClick={crew.leave} />
@@ -410,6 +449,8 @@ function Ship({ s }: { s: CrewSession }) {
       </div>
 
       {task && <TaskPanel key={task.key} task={task} onClose={() => setOpen(null)} />}
+      {info && <InfoCard id={info} onClose={() => setInfo(null)} />}
+      {words && <Glossary onClose={() => setWords(false)} />}
     </div>
   );
 }

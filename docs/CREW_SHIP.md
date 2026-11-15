@@ -51,7 +51,13 @@ Five rooms across, three deep, the Galley in the centre. Every room in a row has
 | Mid | Power Bay | Life Support | **Galley** | Water Recovery | Cargo Lock |
 | Aft | Propulsion Bay | Thermal Control | Grow Lab | MedBay | Storm Shelter |
 
-Each room has its own floor colour, a name sign and a floor stripe. Rooms do not yet have the distinct landmark props listed in the data (`landmark` in `crewData.ts`): **Not built**.
+Each room has its own floor colour, its name painted large on the floor, and two pieces of equipment built from simple shapes (seats, a dish, tanks, fans, crates, thruster bells and so on). Stars surround the ship and the planet turns below it.
+
+## 3D ship tour
+
+**3D ship tour** on the Crew Ship screen starts a solo walk round the ship with nothing at stake. All 30 pieces of equipment can be clicked with the mouse, or walked up to and opened with E. Each card says what the thing does, how it is used, and the word a real crew uses for it, with a link for further reading. **Words to know** (the book button) lists all 30 terms and where each one is on the ship. Equipment can be clicked during emergencies too.
+
+Checked in the browser: the tour started, a click on the pilot seat opened its card, the seen counter moved to 1 of 30, and the glossary listed 30 terms. Only that one piece of equipment was clicked. The linked pages are related NASA reading: they were not checked to contain each definition word for word.
 
 ## Task catalogue
 
