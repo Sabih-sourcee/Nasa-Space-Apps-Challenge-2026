@@ -17,26 +17,26 @@ const LABEL: Record<WorldId, string> = { earth: 'EARTH', shuttle: 'SHUTTLE', sta
 export function MissionPatch({ size = 84 }: { size?: number }) {
   return (
     <svg className="patch" width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-      <rect x="0.5" y="0.5" width="99" height="99" fill="none" stroke="#2A2A2A" />
-      <circle cx="50" cy="50" r="14" fill="none" stroke="#E8E6DF" strokeWidth="1" />
-      <ellipse cx="50" cy="50" rx="40" ry="13" fill="none" stroke="#FF3B1F" strokeWidth="1" transform="rotate(-24 50 50)" />
-      <circle cx="84" cy="34" r="2.2" fill="#FF3B1F" />
-      <path d="M50 4v8M50 88v8M4 50h8M88 50h8" stroke="#8A877E" strokeWidth="1" />
+      <rect x="0.5" y="0.5" width="99" height="99" fill="none" stroke="#3a5490" />
+      <circle cx="50" cy="50" r="14" fill="none" stroke="#f3f6ff" strokeWidth="1" />
+      <ellipse cx="50" cy="50" rx="40" ry="13" fill="none" stroke="#ffc83d" strokeWidth="1" transform="rotate(-24 50 50)" />
+      <circle cx="84" cy="34" r="2.2" fill="#ffc83d" />
+      <path d="M50 4v8M50 88v8M4 50h8M88 50h8" stroke="#aab7d8" strokeWidth="1" />
     </svg>
   );
 }
 
 function LineDrawing({ world }: { world: 'shuttle' | 'station' }) {
-  const s = { fill: 'none', stroke: '#E8E6DF', strokeWidth: 1, vectorEffect: 'non-scaling-stroke' as const };
+  const s = { fill: 'none', stroke: '#f3f6ff', strokeWidth: 1, vectorEffect: 'non-scaling-stroke' as const };
   if (world === 'shuttle') {
     return (
       <svg viewBox="0 0 120 120" width="100%" height="100%" aria-hidden="true" focusable="false">
         <path {...s} d="M60 14c7 7 10 17 10 30v44H50V44c0-13 3-23 10-30z" />
         <path {...s} d="M50 70l-16 18v8l16-6M70 70l16 18v8l-16-6" />
         <path {...s} d="M54 88l-3 12h18l-3-12" />
-        <path {...s} d="M50 44h20M50 58h20" stroke="#8A877E" />
+        <path {...s} d="M50 44h20M50 58h20" stroke="#aab7d8" />
         <circle {...s} cx="60" cy="34" r="4" />
-        <path d="M60 104v10" stroke="#FF3B1F" strokeWidth="1" />
+        <path d="M60 104v10" stroke="#ffc83d" strokeWidth="1" />
       </svg>
     );
   }
@@ -46,7 +46,7 @@ function LineDrawing({ world }: { world: 'shuttle' | 'station' }) {
       {[18, 34, 74, 90].map((x) => (
         <g key={x}>
           <rect {...s} x={x - 6} y="34" width="12" height="52" />
-          <path {...s} d={`M${x - 6} 47h12M${x - 6} 60h12M${x - 6} 73h12`} stroke="#8A877E" />
+          <path {...s} d={`M${x - 6} 47h12M${x - 6} 60h12M${x - 6} 73h12`} stroke="#aab7d8" />
         </g>
       ))}
       <rect {...s} x="50" y="48" width="20" height="24" />
@@ -79,17 +79,17 @@ export function WorldArt({ world, size = 120, className = '' }: { world: WorldId
 
 /** Commander Reyes, the recurring mission commander. An invented character, drawn as a personnel-file outline. */
 export function ReyesPortrait({ size = 120 }: { size?: number }) {
-  const s = { fill: 'none', stroke: '#E8E6DF', strokeWidth: 1, vectorEffect: 'non-scaling-stroke' as const };
+  const s = { fill: 'none', stroke: '#f3f6ff', strokeWidth: 1, vectorEffect: 'non-scaling-stroke' as const };
   return (
     <svg className="reyes" width={size} height={size} viewBox="0 0 120 120" aria-hidden="true" focusable="false">
-      <rect x="0.5" y="0.5" width="119" height="119" fill="#0A0A0A" stroke="#2A2A2A" />
+      <rect x="0.5" y="0.5" width="119" height="119" fill="#111f4a" stroke="#3a5490" />
       <path {...s} d="M18 120c2-24 18-34 42-34s40 10 42 34" />
-      <path {...s} d="M46 86l14 12 14-12" stroke="#8A877E" />
+      <path {...s} d="M46 86l14 12 14-12" stroke="#aab7d8" />
       <ellipse {...s} cx="60" cy="52" rx="19" ry="23" />
-      <path {...s} d="M38 54c-1-21 9-33 22-33s23 12 22 33" stroke="#8A877E" />
-      <path {...s} d="M38 62c1 9 7 12 14 11" stroke="#8A877E" />
-      <circle cx="53" cy="73" r="2" fill="#FF3B1F" />
-      <path d="M6 6h10M6 6v10M114 6h-10M114 6v10M6 114h10M6 114v-10M114 114h-10M114 114v-10" stroke="#8A877E" strokeWidth="1" />
+      <path {...s} d="M38 54c-1-21 9-33 22-33s23 12 22 33" stroke="#aab7d8" />
+      <path {...s} d="M38 62c1 9 7 12 14 11" stroke="#aab7d8" />
+      <circle cx="53" cy="73" r="2" fill="#ffc83d" />
+      <path d="M6 6h10M6 6v10M114 6h-10M114 6v10M6 114h10M6 114v-10M114 114h-10M114 114v-10" stroke="#aab7d8" strokeWidth="1" />
     </svg>
   );
 }
