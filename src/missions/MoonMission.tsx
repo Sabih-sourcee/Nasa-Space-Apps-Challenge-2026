@@ -3,6 +3,7 @@ import { hud } from '../game/hud';
 import { useGame } from '../game/store';
 import { GameCanvas, SunLight } from '../three/GameCanvas';
 import { DeployablePanel, Habitat, LunarLander, Pouch, Rover, Sign, SolarArray } from '../three/Props';
+import { RealAsset } from '../three/models';
 import { EarthGlobe, Rocks, Stars, Terrain } from '../three/Scenery';
 import { makeHeight, scatterRocks } from '../three/terrain';
 import { ResetCard } from '../ui/Hud';
@@ -77,7 +78,7 @@ function MoonEva() {
         <EarthGlobe position={[-500, 520, -2200]} radius={150} />
         <Terrain height={height} kind="moon" size={320} segments={170} repeat={46} />
         <Rocks rocks={rocks} color="#85847f" />
-        <group position={[LANDER.x, height(LANDER.x, LANDER.z), LANDER.z]} rotation={[0, -0.5, 0]}><LunarLander /></group>
+        <group position={[LANDER.x, height(LANDER.x, LANDER.z), LANDER.z]} rotation={[0, -0.5, 0]}><RealAsset kind="lm" fallback={<LunarLander />} /></group>
         {index === 0 && <group position={[LANDER.x - 4.8, height(LANDER.x - 4.8, LANDER.z + 2.8) + 0.16, LANDER.z + 2.8]}><Pouch /></group>}
         <group position={[PANEL_SITE.x, height(PANEL_SITE.x, PANEL_SITE.z), PANEL_SITE.z]} rotation={[0, 0.9, 0]}><DeployablePanel deployed={index >= 2} /></group>
         <Sign lines={['SOLAR PANEL KIT']} position={[PANEL_SITE.x, 0.5, PANEL_SITE.z + 0.9]} rotation={[0, 0.3, 0]} size={[1.5, 0.36]} />
