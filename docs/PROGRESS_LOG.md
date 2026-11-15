@@ -335,3 +335,18 @@ Reported: no animation was showing in any level. Cause: a film only played the f
 - Unverified: two separate computers through `npm start`, a real static web host, the CC and speech options on screen.
 - Honest limit: the reference image is a photo-realistic render. The title screen's layout and panels now follow it; the rocket, pad and astronaut are still the game's own simple models.
 - `npm test`: 283 passed.
+
+## Stage 20: real 3D models and terrain from the dossier branch (15 November 2026)
+
+Asked for: the 3D model functions, the model replacements and the landing terrain from `cursor/dossier-ui-release-a7a9`, without any of its theme changes.
+
+- **Taken** (six commits, cherry-picked in order): Moon and Mars ground from real NASA surface imagery; the Apollo Lunar Module and Perseverance models with the Draco decoder; six more NASA models (shuttle stack, Mobile Launcher, ISS, Space Exploration Vehicle, Habitat Demonstration Unit) and five Poly Haven boulders; those models wired into the pad, launch, docking and surface scenes; the Petavius crater and Olympus Mons landing terrain; the InSight lander at the Mars landing site.
+- **Not taken** (three commits): the mission-dossier restyle, the beginner readability pass and the colour change. No file from them was brought over: `styles.css`, `DocHeader.tsx`, `art.tsx`, `main.tsx`, the two extra font packages and the interface parts of `App.tsx` are as they were on this branch.
+- **Credits.** The branch's four credit commits were written on top of its theme text and would not apply, so the same credits for the models, ground imagery and terrain scans were written into `SCIENCE_AND_CREDITS.md`, the README and the in-game credits by hand, leaving out its font and artwork lines.
+- **Conflicts resolved** in three files where this branch had also changed: the pad (the launch film still leaves the rocket off the pad), and the imports of the launch and docking scenes.
+- **Made consistent.** The docking mission and the films now share one station component, so both show the real ISS with the docking port the simulation aims at. The launch film uses the real Mobile Launcher.
+- Each model replaces the code-drawn one only after it has loaded, and the code-drawn one stays if a file cannot be read.
+- Checked in the browser: the real shuttle stack and Mobile Launcher on the title screen, the Apollo Lunar Module, habitat and real ground on the Moon, the Perseverance rover and real ground on Mars, and every model file answering with status 200 and no load warnings.
+- Unverified: the ISS in the docking view (the pause menu was open when it was captured), the Space Exploration Vehicle, InSight and the two landing terrains on screen, and frame rate with the models loaded (Perseverance alone is 4.9 MB).
+- Known mismatch: the pad now shows the real Space Shuttle, with the orbiter on the side of an orange tank. The Liftoff film and the outside launch view still fly the code-drawn stack, with the orbiter on top, because its boosters and core stage are separate parts that can let go. The two do not look the same.
+- `npm test`: 283 passed.

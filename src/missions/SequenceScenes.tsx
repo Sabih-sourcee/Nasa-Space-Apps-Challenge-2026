@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { shotAt, type SequenceDef } from '../sim/sequences';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { SunLight, simClock } from '../three/GameCanvas';
-import { Habitat, LaunchTower, LunarLander, M, MarsLander, Orbiter, Rover, ShuttleStack, SolarArray, StationExterior } from '../three/Props';
+import { Habitat, LaunchTower, LunarLander, M, MarsLander, Orbiter, Rover, ShuttleStack, SolarArray, Station } from '../three/Props';
+import { RealAsset } from '../three/models';
 import { EarthGlobe, SkyDome, Stars, SunDisc, Terrain } from '../three/Scenery';
 import { fbm, planetTexture } from '../three/textures';
 import { EarthWorld, Yard } from './EarthMission';
@@ -167,7 +168,8 @@ function LaunchScene(props: SceneProps) {
     <>
       <EarthWorld follow={follow} bare />
       <Stars opacity={starsOn} />
-      <group position={[PAD[0] - 11, PAD[1], PAD[2]]}><LaunchTower /></group>
+      {/* The same Mobile Launcher that stands beside the pad everywhere else. */}
+      <group position={[PAD[0] - 16, PAD[1], PAD[2]]}><RealAsset kind="ml" fallback={<group position={[5, 0, 0]}><LaunchTower /></group>} /></group>
       <group ref={rocket} position={PAD}>
         <ShuttleStack parts={{ core, boosterL, boosterR, boosterPower, corePower }} />
         <mesh ref={vent} visible={false} position={[3.2, 30, 0]}>
@@ -364,7 +366,7 @@ function CruiseScene(props: SceneProps) {
       )}
       {hasStation && (
         <group ref={station}>
-          <StationExterior />
+          <Station />
           {/* Air escaping from a module, drawn so the leak can be seen */}
           <group ref={leak} visible={false} position={[-9, 0.6, -8]}>
             {[0, 1, 2, 3].map((i) => (

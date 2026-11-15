@@ -437,6 +437,29 @@ export function DockingPort({ portColor = '#35e07a' }: { portColor?: string }) {
   );
 }
 
+/**
+ * The station as every scene shows it: the real ISS model once it has loaded, wearing the
+ * docking port the simulation aims at, and the code-drawn station until then. The port
+ * faces +z and sits at the group's origin either way.
+ */
+export function Station({ portColor = '#35e07a' }: { portColor?: string }) {
+  const m = M();
+  return (
+    <RealAsset
+      kind="iss"
+      fallback={<StationExterior portColor={portColor} />}
+      modelPosition={[0, -12, -12]}
+      overlay={
+        <>
+          <DockingPort portColor={portColor} />
+          {/* Short connector from the port back toward the station body */}
+          <mesh position={[0, 0, -3.5]} rotation={[Math.PI / 2, 0, 0]} material={m.hull}><cylinderGeometry args={[1.6, 1.9, 7, 28]} /></mesh>
+        </>
+      }
+    />
+  );
+}
+
 /** Fictional orbital station seen from the approaching shuttle. The docking port faces +z. */
 export function StationExterior({ portColor = '#35e07a' }: { portColor?: string }) {
   const m = M();
