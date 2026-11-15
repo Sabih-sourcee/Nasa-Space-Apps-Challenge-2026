@@ -31,9 +31,34 @@
 
 ## Assets
 
-- **3D models, textures and sounds:** generated in code in `src/three/` and `src/game/audio.ts`.
-- **Interface icons, planet art and the Beyond Earth patch:** drawn in code as inline SVG in `src/ui/icons.tsx` and `src/ui/art.tsx`.
-- **Font:** Exo 2, copyright The Exo 2 Project Authors, SIL Open Font License 1.1. It is the one third-party asset in the game. It comes from the `@fontsource-variable/exo-2` npm package and is bundled into the build, so nothing is downloaded while playing. The licence text is in `node_modules/@fontsource-variable/exo-2/LICENSE`.
+- **3D models, textures and sounds:** generated in code in `src/three/` and `src/game/audio.ts`, except the two NASA vehicles listed below.
+- **Interface icons, the shuttle and station line drawings, the Commander portrait and the Beyond Earth patch:** drawn in code as inline SVG in `src/ui/icons.tsx` and `src/ui/art.tsx`. The Earth, Moon and Mars plates on the menus show the NASA maps listed below.
+- **Fonts:** all three use the SIL Open Font License 1.1, come from `@fontsource-variable` npm packages and are bundled into the build, so nothing is downloaded while playing. The licence texts are in each package's `LICENSE` file under `node_modules/@fontsource-variable/`.
+  - Space Grotesk, copyright The Space Grotesk Project Authors. Headings.
+  - JetBrains Mono, copyright The JetBrains Mono Project Authors. Labels, data and telemetry.
+  - Exo 2, copyright The Exo 2 Project Authors. Room names drawn inside the 3D Crew Ship.
+- **Four NASA globe maps** in `public/textures/`, downloaded 15 November 2026. NASA imagery is generally free to use under the NASA Images and Media Usage Guidelines. They are used unchanged.
+  - `earth.jpg`: "Equirectangular Projected Earth", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/3615/ (`earth_noClouds.0330.jpg`). Used on the Earth globe, the Earth plates on the menus and in the Gravity Test Chamber.
+  - `moon.jpg`: "CGI Moon Kit", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/4720/ (`lroc_color_2k.jpg`, from Lunar Reconnaissance Orbiter data). Moon plates on the menus and the Gravity Test Chamber.
+  - `mars.jpg` and `jupiter.jpg`: NASA 3D Resources, https://science.nasa.gov/3d-resources/, fetched from its mirror https://github.com/nasa/NASA-3D-Resources (`Images and Textures/Mars`, `Images and Textures/Jupiter`). Mars plates on the menus (Mars only) and the Gravity Test Chamber.
+- **Four derived NASA ground textures** in `public/textures/`, made 15 November 2026 from the sources below. Each is a cropped region of real surface imagery, mirror-blended at the edges so it tiles without seams, contrast-balanced, and tinted to the game's palette; the `_relief` variants are luminance maps of the same crop, used for roughness and sparkle. The colour detail the player walks on is genuine spacecraft photography.
+  - `moon_ground.jpg` and `moon_relief.jpg`: derived from `lroc_color_2k.jpg`, "CGI Moon Kit", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/4720/ (Lunar Reconnaissance Orbiter Camera data). Ground of the Moon missions (Power Before Shadow, The Last Battery).
+  - `mars_ground.jpg` and `mars_relief.jpg`: derived from the Mars Viking MDIM21 colour mosaic (232 m/px), served as map tiles by NASA Mars Trek, https://trek.nasa.gov/mars/ (tile endpoint `trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m`). Ground of the Mars mission (Dust Storm Outpost).
+- **Seven NASA 3D models** in `public/models/`, from NASA 3D Resources, https://science.nasa.gov/3d-resources/ (mirror https://github.com/nasa/NASA-3D-Resources), downloaded 15 November 2026. They are Draco-compressed glTF binaries, read at runtime with the Google Draco decoder (Apache-2.0, `public/draco/`). If a model cannot be loaded, the code-drawn vehicle takes its place, so play never breaks.
+  - `lm.glb`: "Apollo Lunar Module". Stands on the Moon in Power Before Shadow. Two small changes: the US flag and "UNITED STATES" decals on the descent stage were painted over with the same gold as the surrounding panels, to keep the project's no-flags rule; nothing else was touched.
+  - `perseverance.glb`: "Mars 2020 Perseverance Rover" (NASA / JPL-Caltech). The rover inspected in Dust Storm Outpost. Used as published, including the rover's real JPL wordmark.
+  - `shuttle.glb`: "Space Shuttle" stack (orbiter, external tank and two solid rocket boosters). Stands on the home screen and Earth academy pad. The model is published untextured; the game paints it in code by part (orange tank, white boosters and orbiter, dark engines).
+  - `iss.glb`: "International Space Station". The station docked with in Dock and Drift. Published untextured; seven small disconnected leftover meshes floating above the model were removed, and it is turned so the truss lies across the sky.
+  - `ml.glb`: "Mobile Launcher". The tower beside the pad on the home screen, the Earth academy and the launch. Used as published.
+  - `sev.glb`: "Space Exploration Vehicle" pressurized rover concept. The training rover parked on the Moon in Power Before Shadow. Repacked as a compressed glTF; otherwise as published.
+  - `hdu.glb`: "Habitat Demonstration Unit". The dome module of the surface habitat on the Moon and Mars. The NASA logo and flag decals were scrubbed from the texture to keep the project's no-flags rule; hatches and labels remain.
+  - `insight.glb`: "InSight Cruise Lander (arm deployed)". Stands beside the pad at the Mars landing site. Simplified and Draco-compressed; no other changes.
+- **Two landing-site terrain scans** by SebastianSosnowski on Sketchfab, licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/):
+  - "Moon - Petavius crater", https://sketchfab.com/3d-models/moon-petavius-crater-ce9c009b517b421eab8c8429b536382f. The Moon landing descends onto its crater floor.
+  - "Mars - Olympus Mons", https://sketchfab.com/3d-models/mars-olympus-mons-53679864b41a43b0ae0459ce99d6adf0. The Mars landing descends into its summit caldera.
+  - Changes: each mesh was rasterized top-down into a 16-bit height map (`public/terrain/*_height.png`, high byte in red, low byte in green) and its texture resampled into a matching overhead photo (`*_color.jpg`). The game scales the relief, flattens a circle around each landing zone so the pads stay level, and tiles the maps with mirroring past the edge of the scan.
+- **Five CC0 photogrammetry boulders** in `public/models/`, from Poly Haven, https://polyhaven.com/ (CC0), downloaded 15 November 2026 and decimated to a few thousand triangles each so hundreds of instances stay fast. `rock_moon_1.glb` to `rock_moon_3.glb` are from the "Moon Rock" scan set; `rock_mars_1.glb` and `rock_mars_2.glb` are red desert boulders from the "Namaqualand Boulder" scan set. They replace the painted dodecahedron rocks on the Moon and Mars once loaded.
+- The clouds, the painted fallback ground shown if a texture file is missing, and everything else are still drawn in code.
 - **No other third-party models, images or audio files.**
 - **No NASA insignia and no flags.** Beyond Earth is a hackathon project and is not endorsed by NASA.
 
@@ -46,6 +71,8 @@
 | @react-three/fiber | 9.8.2 | MIT |
 | zustand | 5.1.0 | MIT |
 | @fontsource-variable/exo-2 | 5.3.0 | OFL-1.1 |
+| @fontsource-variable/space-grotesk | 5.3.0 | OFL-1.1 |
+| @fontsource-variable/jetbrains-mono | 5.3.0 | OFL-1.1 |
 | vite | 8.3.8 | MIT |
 | @vitejs/plugin-react | 6.3.0 | MIT |
 | vitest | 5.1.0 | MIT |

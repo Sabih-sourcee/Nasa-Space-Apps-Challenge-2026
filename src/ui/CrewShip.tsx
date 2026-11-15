@@ -443,6 +443,7 @@ function Ship({ s }: { s: CrewSession }) {
         </div>
 
         <div className="hud-bottom">
+          {!prompt && !open && <span className="mouse-tip"><Icon name="hand" size={15} /> Click the floor to walk, or use W A S D. Click a station or equipment to use it.</span>}
           {prompt && !open && <div className="hud-prompt">{m ? <><Keycap>{m[1]}</Keycap><span>{m[2]}</span></> : <span>{withKeys(prompt)}</span>}</div>}
           {lastLines.length > 0 && <Comm name="Ship log" live="polite">{lastLines.map((l) => <span key={l.n} className={`log-line log-${l.kind}`}>{l.text}</span>)}</Comm>}
         </div>

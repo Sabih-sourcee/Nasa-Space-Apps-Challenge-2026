@@ -93,6 +93,13 @@ export const SOURCES: Source[] = [
     use: 'Mars has a thin atmosphere, mostly carbon dioxide. Winds can raise dust storms that cover much of the planet, and the dust can take months to settle.',
     simplified: 'Storm length, power numbers and the panel brush are invented game rules.',
   },
+  {
+    id: 'body_in_space', kind: 'nasa-reference', org: 'NASA',
+    title: 'The human body in space',
+    url: 'https://www.nasa.gov/humans-in-space/the-human-body-in-space/',
+    use: 'Without Earth gravity, weight-bearing bones lose on average 1% to 1.5% of mineral density a month, muscles weaken, and body fluid shifts toward the head. Crews exercise to slow this.',
+    simplified: 'The Gravity Test Chamber is invented: no real tube can switch gravity. The height gain and the two hours of daily exercise are from other NASA articles, rounded.',
+  },
 ];
 
 export function sourceById(id: string): Source | undefined {

@@ -199,3 +199,19 @@ Not checked in this stage:
 - The other crew members are implied by text and lights. Only the player's astronaut is modelled.
 - 14 campaign missions are listed as Planned and are not playable.
 - The robotic arm is a flat two-joint model, and station gauge readings are illustrative. The NASA life support page confirms that the system controls cabin pressure, and gives no numbers.
+
+## Stage 12: mouse walking and planet surfaces (15 November 2026)
+
+- **Mouse and touch walking.** In every walking scene (Earth, Moon, Mars, the F03 ship, L03 and Crew Ship) a click or tap on the ground walks the astronaut there, and holding and dragging keeps steering. A click on a station walks to it and uses it. Any movement key cancels the target. Keys and on-screen buttons work as before. Checked in the browser on the Crew Ship and on Mars with scripted pointer events. A real mouse, a real touch screen, and the click-to-use path: Unverified.
+- **Title screen.** The view leans with the mouse and the astronaut turns toward it.
+- **Earth.** Painted again with forest, desert, mountains, ice and a lighter sea shelf. The sea is shinier than the land, a cloud layer drifts on its own, and the rim of air glows at the edge. Seen from orbit, the globe is turned so the pole is not under the camera. The continents are invented.
+- **Moon and Mars ground.** Small craters with bright rims, dune ripples and stones, with matching relief so they catch the sun. Each sample is mixed with a larger turned copy, which hides the repeat that showed as a grid from the lander.
+- All of it is still drawn in code. No photographs or NASA image files were added. Frame rate with the larger textures: Unverified.
+
+## Stage 13: real NASA maps and the Gravity Test Chamber (15 November 2026)
+
+- **Real maps.** Four NASA globe maps were added to `public/textures/` (Earth, Moon, Mars, Jupiter; about 2 MB together; sources in `SCIENCE_AND_CREDITS.md`). The Earth globe in every scene now uses the real map, with the painted Earth showing until it loads. Clouds and the ground underfoot are still painted. Two files from the first download (a false-colour Earth and a Moon photograph) were not usable as maps and were removed.
+- **Gravity Test Chamber** (Gravity Lab on the title screen). A glass tube with a cadet inside and five places to copy: Moon, Mars, Earth, Jupiter and the space station. Pick one by clicking its globe or its button, then jump (Space) or drop a ball from 2 m (E). The panel shows gravity, what a scale would read for a 32 kg cadet, jump height, fall time and air pressure, and a card says what happens to the body there and what you would need to survive. Tests are listed side by side to compare. Rules are in `src/sim/gravityLab.ts` with 13 unit tests.
+- Checked in the browser: the chamber opened, Moon and station were picked, a Moon jump measured about 2.1 m in 3.2 s and the ball 1.57 s. Clicking a globe with a real mouse, the other three worlds on screen, and narrow or touch screens: Unverified.
+- Science limits: no real chamber can switch gravity. Jupiter has no ground, so the tube only copies its pull. The body notes for the Moon, Mars and Jupiter are reasoning from the lower or higher pull, not measured crew data; the station figures are NASA's.
+- `npm test`: 228 passed.

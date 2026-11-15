@@ -11,6 +11,7 @@ import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight } from '../three/GameCanvas';
 import { LaunchTower, M, Pouch, ShuttleStack, Sign, Strut } from '../three/Props';
+import { RealAsset } from '../three/models';
 import { ObjectiveMarker, SkyDome } from '../three/Scenery';
 import { groundTexture } from '../three/textures';
 import { WalkerRig, type Interactable } from '../three/WalkerRig';
@@ -46,8 +47,8 @@ export function EarthWorld({ follow }: { follow?: React.MutableRefObject<{ x: nu
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[40, 0.01, -120]} material={concrete} receiveShadow><planeGeometry args={[26, 120]} /></mesh>
       <group position={[40, 0, -190]}>
         <mesh position={[0, 1.5, 0]} material={m.darkSteel} receiveShadow castShadow><boxGeometry args={[30, 3, 30]} /></mesh>
-        <group position={[0, 3, 0]}><ShuttleStack /></group>
-        <group position={[-11, 3, 0]}><LaunchTower /></group>
+        <group position={[0, 3, 0]}><RealAsset kind="shuttle" fallback={<ShuttleStack />} /></group>
+        <group position={[-16, 3, 0]}><RealAsset kind="ml" fallback={<group position={[5, 0, 0]}><LaunchTower /></group>} /></group>
       </group>
       {/* Assembly building and hangars on the horizon */}
       <mesh position={[-150, 40, -330]} material={m.white}><boxGeometry args={[90, 80, 70]} /></mesh>
@@ -63,14 +64,28 @@ export function EarthWorld({ follow }: { follow?: React.MutableRefObject<{ x: nu
 export function HomeScene() {
   const anim = useRef(makeAnim('walk'));
   const focus = useRef({ x: 30.8, y: 0, z: -113.4 });
-  useFrame(({ camera }) => {
-    camera.position.set(27.5, 1.6, -105);
-    camera.lookAt(30, 13.5, -190);
+  const body = useRef<THREE.Group>(null);
+  const mouse = useRef({ x: 0, y: 0 });
+  const eased = useRef({ x: 0, y: 0 });
+  // The menu sits over the canvas, so the pointer is read from the window.
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => { mouse.current = { x: (e.clientX / window.innerWidth) * 2 - 1, y: (e.clientY / window.innerHeight) * 2 - 1 }; };
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
+  useFrame(({ camera }, delta) => {
+    const k = 1 - Math.exp(-3 * Math.min(delta, 0.1));
+    eased.current.x += (mouse.current.x - eased.current.x) * k;
+    eased.current.y += (mouse.current.y - eased.current.y) * k;
+    // Moving the mouse leans the view, and the astronaut turns to follow it.
+    camera.position.set(27.5 + eased.current.x * 1.6, 1.6 - eased.current.y * 0.5, -105);
+    camera.lookAt(30 + eased.current.x * 5, 13.5 - eased.current.y * 3, -190);
+    if (body.current) body.current.rotation.y = -0.37 + eased.current.x * 0.9;
   });
   return (
     <>
       <EarthWorld follow={focus} />
-      <group position={[30.8, 0, -113.4]} rotation={[0, -0.37, 0]}>
+      <group ref={body} position={[30.8, 0, -113.4]} rotation={[0, -0.37, 0]}>
         <Astronaut anim={anim} still />
       </group>
     </>

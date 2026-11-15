@@ -3,8 +3,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { hud } from '../game/hud';
 import { useGame } from '../game/store';
-import { GameCanvas, SunLight, simClock } from '../three/GameCanvas';
+import { GameCanvas, SunLight, simClock, useReducedMotion } from '../three/GameCanvas';
 import { Habitat, MarsLander, Pouch, Rover, SolarArray } from '../three/Props';
+import { RealAsset, RealRocks } from '../three/models';
 import { Rocks, SkyDome, Terrain } from '../three/Scenery';
 import { makeHeight, scatterRocks } from '../three/terrain';
 import { ResetCard } from '../ui/Hud';
@@ -116,10 +117,14 @@ function MarsEva() {
         <DustStorm level={storm} tier={run.tier} />
         <StormClock on={stormOn} level={storm} solar={solar} />
         <Terrain height={height} kind="mars" size={320} segments={170} repeat={46} />
-        <Rocks rocks={rocks} color="#7c452c" />
+        <RealRocks world="mars" rocks={rocks} fallback={<Rocks rocks={rocks} color="#7c452c" />} />
         <group position={[LANDER.x, height(LANDER.x, LANDER.z), LANDER.z]} rotation={[0, -0.4, 0]}><MarsLander /></group>
         <group position={[ROVER.x, height(ROVER.x, ROVER.z), ROVER.z]} rotation={[0, 0.5, 0]}>
-          <Rover dust={index >= 2 ? 0 : 1} wheelAlert={index === 0} />
+          <RealAsset
+            kind="perseverance"
+            fallback={<Rover dust={index >= 2 ? 0 : 1} wheelAlert={index === 0} />}
+            overlay={index === 0 ? <WheelFaultMarker position={[-1.05, 0.45, 0.95]} /> : null}
+          />
           {index <= 2 && <group position={[-1.0, 1.42, 0.2]}><Pouch /></group>}
         </group>
         <group position={[HAB.x, 0, HAB.z]}><Habitat tint="mars" beacon={index >= 3} /></group>
@@ -142,6 +147,36 @@ function MarsEva() {
         />
       )}
     </>
+  );
+}
+
+/** Pulsing amber ring at the faulty front wheel of the real Perseverance model. */
+function WheelFaultMarker({ position }: { position: [number, number, number] }) {
+  const gem = useRef<THREE.Mesh>(null);
+  const ring = useRef<THREE.Mesh>(null);
+  const reduced = useReducedMotion();
+  useFrame(({ clock }) => {
+    const pulse = reduced ? 1 : 0.75 + Math.sin(clock.elapsedTime * 5) * 0.25;
+    if (gem.current) {
+      gem.current.position.y = 0.62 + (reduced ? 0 : Math.sin(clock.elapsedTime * 2.4) * 0.08);
+      gem.current.rotation.y = clock.elapsedTime * 1.4;
+    }
+    if (ring.current) {
+      ring.current.scale.setScalar(pulse);
+      (ring.current.material as THREE.MeshBasicMaterial).opacity = 0.45 + pulse * 0.4;
+    }
+  });
+  return (
+    <group position={position}>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.32, 0]}>
+        <ringGeometry args={[0.34, 0.46, 32]} />
+        <meshBasicMaterial color="#ffb020" transparent opacity={0.85} side={THREE.DoubleSide} fog={false} />
+      </mesh>
+      <mesh ref={gem} scale={[0.13, 0.2, 0.13]}>
+        <octahedronGeometry args={[1, 0]} />
+        <meshBasicMaterial color="#ffb020" fog={false} />
+      </mesh>
+    </group>
   );
 }
 

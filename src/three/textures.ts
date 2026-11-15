@@ -1,5 +1,6 @@
-// Procedural textures drawn on canvases at start-up. The game ships no image
-// files, so there is nothing to download and nothing third-party to credit.
+// Procedural textures drawn on canvases at start-up, plus four NASA globe maps
+// in public/textures (credited in docs/SCIENCE_AND_CREDITS.md). The ground you
+// walk on is painted here. The painted Earth is what shows until the real map loads.
 
 import * as THREE from 'three';
 
@@ -95,28 +96,92 @@ function blotches(ctx: CanvasRenderingContext2D, w: number, h: number, seed: num
 
 export type GroundKind = 'moon' | 'mars' | 'concrete' | 'field';
 
+/** Draws a round shape with its wrapped copies, so the texture still tiles. */
+function tiled(ctx: CanvasRenderingContext2D, w: number, h: number, x: number, y: number, rad: number, draw: () => void): void {
+  for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) {
+    const cx = x + ox, cy = y + oy;
+    if (cx < -rad || cx > w + rad || cy < -rad || cy > h + rad) continue;
+    ctx.save();
+    ctx.translate(cx, cy);
+    draw();
+    ctx.restore();
+  }
+}
+
+function disc(ctx: CanvasRenderingContext2D, rad: number, stops: [number, string][]): void {
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rad);
+  for (const [t, c] of stops) g.addColorStop(t, c);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, rad, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** The same small craters are used for colour and for relief, so they line up. */
+function moonCraters(w: number, h: number): { x: number; y: number; rad: number }[] {
+  const r = rng(13);
+  const out: { x: number; y: number; rad: number }[] = [];
+  for (let i = 0; i < 54; i++) out.push({ x: r() * w, y: r() * h, rad: 3 + r() * r() * 26 });
+  return out;
+}
+
+function marsStones(w: number, h: number): { x: number; y: number; rad: number; tone: number }[] {
+  const r = rng(27);
+  const out: { x: number; y: number; rad: number; tone: number }[] = [];
+  for (let i = 0; i < 170; i++) out.push({ x: r() * w, y: r() * h, rad: 1.5 + r() * r() * 9, tone: r() });
+  return out;
+}
+
+/** Wind ripples in the dust, in [-1, 1]. Whole-number frequencies keep it tiling. */
+function ripple(x: number, y: number, w: number, h: number): number {
+  const T = Math.PI * 2;
+  const patch = 0.5 + 0.5 * Math.sin(T * (x / w + (2 * y) / h) + 1.3);
+  return Math.sin(T * ((13 * y) / h) + 1.6 * Math.sin(T * ((2 * x) / w)) + 0.8 * Math.sin(T * ((3 * x) / w + y / h))) * patch;
+}
+
 export function groundTexture(kind: GroundKind): THREE.CanvasTexture {
-  return make(`ground-${kind}`, 512, 512, (ctx, w, h) => {
+  const big = kind === 'moon' || kind === 'mars';
+  return make(`ground-${kind}`, big ? 1024 : 512, big ? 1024 : 512, (ctx, w, h) => {
     if (kind === 'moon') {
-      ctx.fillStyle = '#8b8a88';
+      ctx.fillStyle = '#868583';
       ctx.fillRect(0, 0, w, h);
-      blotches(ctx, w, h, 11, 60, ['#a3a29f', '#6f6e6c', '#7d7c7a'], 70);
-      speckle(ctx, w, h, 12, 9000, '#c0bfbb', '#4f4e4d');
-      // Small pits only. Large craters are real geometry, so the tiling pattern stays hidden.
-      const r = rng(13);
-      for (let i = 0; i < 70; i++) {
-        const x = r() * w, y = r() * h, rad = 0.8 + r() * r() * 2.6;
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = '#5c5b5a';
-        ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+      blotches(ctx, w, h, 11, 150, ['#a3a29f', '#6a6968', '#7d7c7a', '#8f8c86'], 110);
+      speckle(ctx, w, h, 12, 34000, '#c4c3bf', '#4c4b4a');
+      // Small craters only. Large ones are real geometry, so the tiling pattern stays hidden.
+      // Each has a darker floor and a ring of brighter dust thrown out around it.
+      for (const c of moonCraters(w, h)) {
+        tiled(ctx, w, h, c.x, c.y, c.rad * 1.9, () => disc(ctx, c.rad * 1.9, [
+          [0, 'rgba(66,65,64,0.5)'], [0.42, 'rgba(82,81,80,0.4)'], [0.53, 'rgba(200,199,194,0.5)'],
+          [0.72, 'rgba(172,171,167,0.2)'], [1, 'rgba(172,171,167,0)'],
+        ]));
       }
-      ctx.globalAlpha = 1;
     } else if (kind === 'mars') {
-      ctx.fillStyle = '#a5512c';
+      ctx.fillStyle = '#a65a34';
       ctx.fillRect(0, 0, w, h);
-      blotches(ctx, w, h, 21, 70, ['#c1693a', '#8a3f22', '#b05a30', '#7a3a22'], 80);
-      speckle(ctx, w, h, 22, 8000, '#d08955', '#5e2a18');
-      speckle(ctx, w, h, 23, 260, '#6b3320', '#4a2416', 5);
+      blotches(ctx, w, h, 21, 190, ['#c47443', '#8a4326', '#b3653a', '#7a3d24', '#c98a58'], 120);
+      // Wind ripples: pale dust on the crests, darker sand in the troughs.
+      const img = ctx.getImageData(0, 0, w, h);
+      const d = img.data;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const k = 1 + ripple(x, y, w, h) * 0.085;
+        const i = (y * w + x) * 4;
+        d[i] = Math.min(255, d[i] * k); d[i + 1] = Math.min(255, d[i + 1] * k); d[i + 2] = Math.min(255, d[i + 2] * k);
+      }
+      ctx.putImageData(img, 0, 0);
+      speckle(ctx, w, h, 22, 30000, '#d6935e', '#5e2c19');
+      // Dark volcanic stones, each with a soft shadow and a dusty top.
+      for (const st of marsStones(w, h)) {
+        tiled(ctx, w, h, st.x, st.y, st.rad * 2.2, () => {
+          ctx.save(); ctx.translate(st.rad * 0.5, st.rad * 0.4);
+          disc(ctx, st.rad * 1.7, [[0, 'rgba(46,20,12,0.5)'], [1, 'rgba(46,20,12,0)']]);
+          ctx.restore();
+          const base = st.tone > 0.5 ? '74,44,34' : '98,56,38';
+          disc(ctx, st.rad, [[0, `rgba(${base},0.95)`], [0.8, `rgba(${base},0.9)`], [1, `rgba(${base},0)`]]);
+          ctx.save(); ctx.translate(-st.rad * 0.25, -st.rad * 0.3);
+          disc(ctx, st.rad * 0.6, [[0, 'rgba(206,140,96,0.5)'], [1, 'rgba(206,140,96,0)']]);
+          ctx.restore();
+        });
+      }
     } else if (kind === 'concrete') {
       ctx.fillStyle = '#8f9193';
       ctx.fillRect(0, 0, w, h);
@@ -132,6 +197,40 @@ export function groundTexture(kind: GroundKind): THREE.CanvasTexture {
       speckle(ctx, w, h, 42, 7000, '#9aa66a', '#465430', 1.6);
     }
   });
+}
+
+/**
+ * Relief for the Moon and Mars ground, matched to the colour texture: crater
+ * bowls and raised rims, dune ripples and stones. Mid grey is level ground.
+ */
+export function groundRelief(kind: 'moon' | 'mars'): THREE.CanvasTexture {
+  return make(`relief-${kind}`, 1024, 1024, (ctx, w, h) => {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, w, h);
+    if (kind === 'moon') {
+      blotches(ctx, w, h, 14, 120, ['#9a9a9a', '#686868'], 90);
+      for (const c of moonCraters(w, h)) {
+        tiled(ctx, w, h, c.x, c.y, c.rad * 1.9, () => disc(ctx, c.rad * 1.9, [
+          [0, 'rgba(18,18,18,0.92)'], [0.4, 'rgba(44,44,44,0.85)'], [0.53, 'rgba(238,238,238,0.9)'],
+          [0.75, 'rgba(156,156,156,0.35)'], [1, 'rgba(128,128,128,0)'],
+        ]));
+      }
+      speckle(ctx, w, h, 15, 30000, '#ffffff', '#000000', 1.8);
+    } else {
+      const img = ctx.getImageData(0, 0, w, h);
+      const d = img.data;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const v = 128 + ripple(x, y, w, h) * 58;
+        const i = (y * w + x) * 4;
+        d[i] = d[i + 1] = d[i + 2] = v;
+      }
+      ctx.putImageData(img, 0, 0);
+      for (const st of marsStones(w, h)) {
+        tiled(ctx, w, h, st.x, st.y, st.rad * 1.2, () => disc(ctx, st.rad * 1.2, [[0, 'rgba(255,255,255,0.95)'], [0.7, 'rgba(225,225,225,0.8)'], [1, 'rgba(128,128,128,0)']]));
+      }
+      speckle(ctx, w, h, 25, 26000, '#ffffff', '#000000', 1.6);
+    }
+  }, false);
 }
 
 /** Neutral grain used as a bump map on fabric, regolith and painted metal. */
@@ -243,38 +342,144 @@ export function labelTexture(lines: string[], opts: { bg?: string; fg?: string; 
 }
 
 /** Stylised Earth for orbital and lunar skies. Painted, not a satellite image. */
-export function earthTexture(): THREE.CanvasTexture {
-  return make('earth', 1024, 512, (ctx, w, h) => {
-    const sea = ctx.createLinearGradient(0, 0, 0, h);
-    sea.addColorStop(0, '#dfeaf2'); sea.addColorStop(0.12, '#2a5f9e'); sea.addColorStop(0.5, '#164a8c');
-    sea.addColorStop(0.88, '#2a5f9e'); sea.addColorStop(1, '#eef3f7');
-    ctx.fillStyle = sea;
-    ctx.fillRect(0, 0, w, h);
+export type PlanetMap = 'earth' | 'moon' | 'mars' | 'jupiter';
+const planetCache = new Map<PlanetMap, THREE.Texture>();
+
+/** A real NASA map of a whole world, wrapped once round a globe. It fills in when the image arrives. */
+export function planetTexture(name: PlanetMap): THREE.Texture {
+  const hit = planetCache.get(name);
+  if (hit) return hit;
+  const t = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/${name}.jpg`);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  planetCache.set(name, t);
+  return t;
+}
+
+let realEarthCache: Promise<{ map: THREE.Texture; rough: THREE.CanvasTexture }> | null = null;
+
+/** The real Earth map, with a shine map worked out from it: blue water glints, land and ice do not. */
+export function realEarth(): Promise<{ map: THREE.Texture; rough: THREE.CanvasTexture }> {
+  realEarthCache ??= new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}textures/earth.jpg`).then((map) => {
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.wrapS = THREE.RepeatWrapping;
+    map.anisotropy = 8;
+    const w = 1024, h = 512;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d') as CanvasRenderingContext2D;
+    ctx.drawImage(map.image as CanvasImageSource, 0, 0, w, h);
     const img = ctx.getImageData(0, 0, w, h);
     const d = img.data;
-    for (let y = 0; y < h; y++) {
-      const lat = Math.abs(y / h - 0.5) * 2;
-      for (let x = 0; x < w; x++) {
-        const u = (x / w) * 8, v = (y / h) * 4;
-        // Blend the noise across the seam so the map wraps cleanly.
-        const t = x / w;
-        const land = fbm(u, v, 5) * (1 - t) + fbm(u - 8, v, 5) * t;
-        const cloud = fbm(u * 1.7 + 3, v * 2.6, 9) * (1 - t) + fbm((u - 8) * 1.7 + 3, v * 2.6, 9) * t;
-        const i = (y * w + x) * 4;
-        if (land > 0.56 && lat < 0.86) {
-          const dry = fbm(u * 2, v * 2, 3);
-          const k = Math.min(1, (land - 0.56) * 9);
-          const lr = dry > 0.5 ? 150 : 62, lg = dry > 0.5 ? 128 : 112, lb = dry > 0.5 ? 82 : 58;
-          d[i] += (lr - d[i]) * k; d[i + 1] += (lg - d[i + 1]) * k; d[i + 2] += (lb - d[i + 2]) * k;
-        }
-        if (cloud > 0.55) {
-          const k = Math.min(1, (cloud - 0.55) * 5) * 0.92;
-          d[i] += (250 - d[i]) * k; d[i + 1] += (252 - d[i + 1]) * k; d[i + 2] += (255 - d[i + 2]) * k;
-        }
-      }
+    for (let i = 0; i < d.length; i += 4) {
+      const water = d[i + 2] > d[i] + 22 && d[i + 2] >= d[i + 1] && d[i] < 120;
+      const v = water ? 90 : 242;
+      d[i] = d[i + 1] = d[i + 2] = v;
     }
     ctx.putImageData(img, 0, 0);
+    const rough = new THREE.CanvasTexture(c);
+    rough.wrapS = THREE.RepeatWrapping;
+    return { map, rough };
   });
+  return realEarthCache;
+}
+
+export type EarthMaps = { map: THREE.CanvasTexture; rough: THREE.CanvasTexture; clouds: THREE.CanvasTexture };
+let earthCache: EarthMaps | null = null;
+
+function smooth(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * A painted Earth: the surface colour, how shiny each part is (sea glints,
+ * land does not), and a separate cloud layer that drifts over it. The
+ * continents are invented shapes, not a map of the real ones.
+ */
+export function earthMaps(): EarthMaps {
+  if (earthCache) return earthCache;
+  const canvas = (w: number, h: number) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  // Noise blended across the seam so the map wraps cleanly round the globe.
+  const wrapped = (u: number, v: number, seed: number, period: number, t: number) => fbm(u, v, seed) * (1 - t) + fbm(u - period, v, seed) * t;
+
+  const W = 1536, H = 768;
+  const cs = canvas(W, H), cr = canvas(W, H);
+  const xs = cs.getContext('2d') as CanvasRenderingContext2D, xr = cr.getContext('2d') as CanvasRenderingContext2D;
+  const is = xs.createImageData(W, H), ir = xr.createImageData(W, H);
+  const ds = is.data, dr = ir.data;
+  for (let y = 0; y < H; y++) {
+    const lat = Math.abs(y / H - 0.5) * 2; // 0 at the equator, 1 at a pole
+    for (let x = 0; x < W; x++) {
+      const t = x / W, u = t * 8, v = (y / H) * 4;
+      const land = wrapped(u, v, 5, 8, t) + (fbm(u * 5, v * 5, 31) - 0.5) * 0.07;
+      const clim = wrapped(u * 1.5 + 9, v * 1.5, 23, 12, t);
+      const i = (y * W + x) * 4;
+      // Deep water is dark, and it gets lighter on the shelf near a coast.
+      const shelf = smooth(0.38, 0.56, land);
+      let r = 6 + 22 * shelf, g = 28 + 66 * shelf, b = 70 + 78 * shelf, rough = 0.34;
+      // Edges are blended over a few pixels, so coasts and ice stay smooth when the globe fills the view.
+      const coast = smooth(0.552, 0.578, land);
+      if (coast > 0) {
+        const hgt = Math.min(1, Math.max(0, (land - 0.56) * 6));
+        // Forest near the equator, lighter green further out, bare ground toward the poles.
+        const tropic = 1 - smooth(0.12, 0.34, lat);
+        let lr = 70 - 34 * tropic, lg = 108 - 18 * tropic, lb = 56 - 12 * tropic;
+        const desert = smooth(0.46, 0.62, clim) * smooth(0.1, 0.24, lat) * (1 - smooth(0.42, 0.6, lat));
+        lr += (198 - lr) * desert; lg += (164 - lg) * desert; lb += (110 - lb) * desert;
+        const cold = smooth(0.6, 0.82, lat);
+        lr += (126 - lr) * cold; lg += (120 - lg) * cold; lb += (100 - lb) * cold;
+        const peak = smooth(0.55, 0.95, hgt);
+        lr += (134 - lr) * peak; lg += (122 - lg) * peak; lb += (108 - lb) * peak;
+        const snow = smooth(0.82, 1, hgt) * smooth(0.3, 0.7, lat);
+        lr += (240 - lr) * snow; lg += (242 - lg) * snow; lb += (246 - lb) * snow;
+        const shade = 0.86 + clim * 0.26;
+        r += (lr * shade - r) * coast; g += (lg * shade - g) * coast; b += (lb * shade - b) * coast;
+        rough += (0.96 - rough) * coast;
+      }
+      // Polar ice and snow.
+      const ice = smooth(0.87, 0.93, lat + (land - 0.5) * 0.3 + (clim - 0.5) * 0.08);
+      const white = 0.9 + clim * 0.1;
+      r += (236 * white - r) * ice; g += (242 * white - g) * ice; b += (248 * white - b) * ice;
+      rough += (0.72 - rough) * ice;
+      ds[i] = r; ds[i + 1] = g; ds[i + 2] = b; ds[i + 3] = 255;
+      const rv = rough * 255;
+      dr[i] = rv; dr[i + 1] = rv; dr[i + 2] = rv; dr[i + 3] = 255;
+    }
+  }
+  xs.putImageData(is, 0, 0);
+  xr.putImageData(ir, 0, 0);
+
+  const CW = 1024, CH = 512;
+  const cc = canvas(CW, CH);
+  const xc = cc.getContext('2d') as CanvasRenderingContext2D;
+  const ic = xc.createImageData(CW, CH);
+  const dc = ic.data;
+  for (let y = 0; y < CH; y++) {
+    const lat = Math.abs(y / CH - 0.5) * 2;
+    // Cloudy along the equator and in the storm belts, clearer between them.
+    const belt = 0.07 * Math.cos(lat * Math.PI * 3.4) - 0.05 * smooth(0.8, 1, lat);
+    for (let x = 0; x < CW; x++) {
+      const t = x / CW, u = t * 8, v = (y / CH) * 4;
+      const c = wrapped(u * 1.7 + 3, v * 2.6, 9, 13.6, t) + (wrapped(u * 5 + 1, v * 7, 17, 40, t) - 0.5) * 0.3 + belt;
+      // Stored soft. The cloud edge is cut in the shader, so it stays crisp from close up.
+      const a = Math.min(1, Math.max(0, (c - 0.3) / 0.6)) * 255;
+      const i = (y * CW + x) * 4;
+      dc[i] = dc[i + 1] = dc[i + 2] = a; dc[i + 3] = 255;
+    }
+  }
+  xc.putImageData(ic, 0, 0);
+
+  const tex = (c: HTMLCanvasElement, srgb: boolean) => {
+    const tx = new THREE.CanvasTexture(c);
+    if (srgb) tx.colorSpace = THREE.SRGBColorSpace;
+    tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+    tx.anisotropy = 8;
+    return tx;
+  };
+  earthCache = { map: tex(cs, true), rough: tex(cr, false), clouds: tex(cc, false) };
+  return earthCache;
 }
 
 /** A canvas that scenes redraw while playing (cockpit displays, console screens). */

@@ -13,7 +13,8 @@ import { rateStation } from '../sim/score';
 import type { Tier } from '../sim/types';
 import { Astronaut, makeAnim } from '../three/Astronaut';
 import { GameCanvas, SunLight, useReducedMotion, useSim } from '../three/GameCanvas';
-import { M, Pouch, Sign, StationExterior, Strut } from '../three/Props';
+import { DockingPort, M, Pouch, Sign, StationExterior, Strut } from '../three/Props';
+import { RealAsset } from '../three/models';
 import { EarthGlobe, Stars } from '../three/Scenery';
 import { panelTexture } from '../three/textures';
 import { ResetCard } from '../ui/Hud';
@@ -86,8 +87,22 @@ export function DockingScene({ sim, tier, onEnd }: { sim: React.MutableRefObject
       <Stars />
       <ambientLight intensity={0.16} />
       <SunLight direction={[0.6, 0.5, 0.6]} intensity={3.6} size={40} />
-      <EarthGlobe position={[80, -1135, -520]} radius={1100} spin={0.006} />
-      <group ref={station}><StationExterior portColor={portColor} /></group>
+      <EarthGlobe position={[80, -1135, -520]} radius={1100} spin={0.006} below />
+      <group ref={station}>
+        {/* The real ISS once it has loaded, wearing the same docking port the sim aims at. */}
+        <RealAsset
+          kind="iss"
+          fallback={<StationExterior portColor={portColor} />}
+          modelPosition={[0, -12, -12]}
+          overlay={
+            <>
+              <DockingPort portColor={portColor} />
+              {/* Short connector from the port back toward the station body */}
+              <mesh position={[0, 0, -3.5]} rotation={[Math.PI / 2, 0, 0]} material={m.hull}><cylinderGeometry args={[1.6, 1.9, 7, 28]} /></mesh>
+            </>
+          }
+        />
+      </group>
       {/* Shuttle nose and docking probe seen at the bottom of the docking camera */}
       <mesh position={[0, -1.9, -2.9]} rotation={[-Math.PI / 2 - 0.1, 0, 0]} material={m.white}><coneGeometry args={[1.05, 2.6, 28]} /></mesh>
       <mesh position={[0, -1.32, -2.7]} rotation={[Math.PI / 2, 0, 0]} material={m.steel}><torusGeometry args={[0.36, 0.045, 8, 28]} /></mesh>

@@ -182,7 +182,7 @@ function Hull({ tasks, session, onPick }: { tasks: LiveTask[]; session: CrewSess
     <group>
       {/* The Kestrel is in orbit: stars around it and the planet turning far below */}
       <Stars />
-      <EarthGlobe position={[0, -1180, -260]} radius={1100} spin={0.004} />
+      <EarthGlobe position={[0, -1180, -260]} radius={1100} spin={0.004} below />
       <ambientLight intensity={0.5} />
       <directionalLight position={[8, 20, 10]} intensity={1.5} castShadow />
       {ROOMS.map((room) => {
