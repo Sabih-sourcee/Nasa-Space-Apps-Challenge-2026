@@ -32,12 +32,15 @@
 ## Assets
 
 - **3D models, textures and sounds:** generated in code in `src/three/` and `src/game/audio.ts`.
-- **Interface icons, planet art and the Beyond Earth patch:** drawn in code as inline SVG in `src/ui/icons.tsx` and `src/ui/art.tsx`.
-- **Font:** Exo 2, copyright The Exo 2 Project Authors, SIL Open Font License 1.1. It is the one third-party asset in the game. It comes from the `@fontsource-variable/exo-2` npm package and is bundled into the build, so nothing is downloaded while playing. The licence text is in `node_modules/@fontsource-variable/exo-2/LICENSE`.
+- **Interface icons, the shuttle and station line drawings, the Commander portrait and the Beyond Earth patch:** drawn in code as inline SVG in `src/ui/icons.tsx` and `src/ui/art.tsx`. The Earth, Moon and Mars plates on the menus show the NASA maps listed below.
+- **Fonts:** all three use the SIL Open Font License 1.1, come from `@fontsource-variable` npm packages and are bundled into the build, so nothing is downloaded while playing. The licence texts are in each package's `LICENSE` file under `node_modules/@fontsource-variable/`.
+  - Space Grotesk, copyright The Space Grotesk Project Authors. Headings.
+  - JetBrains Mono, copyright The JetBrains Mono Project Authors. Labels, data and telemetry.
+  - Exo 2, copyright The Exo 2 Project Authors. Room names drawn inside the 3D Crew Ship.
 - **Four NASA globe maps** in `public/textures/`, downloaded 15 November 2026. NASA imagery is generally free to use under the NASA Images and Media Usage Guidelines. They are used unchanged.
-  - `earth.jpg`: "Equirectangular Projected Earth", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/3615/ (`earth_noClouds.0330.jpg`). Used on the Earth globe and in the Gravity Test Chamber.
-  - `moon.jpg`: "CGI Moon Kit", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/4720/ (`lroc_color_2k.jpg`, from Lunar Reconnaissance Orbiter data). Gravity Test Chamber.
-  - `mars.jpg` and `jupiter.jpg`: NASA 3D Resources, https://science.nasa.gov/3d-resources/, fetched from its mirror https://github.com/nasa/NASA-3D-Resources (`Images and Textures/Mars`, `Images and Textures/Jupiter`). Gravity Test Chamber.
+  - `earth.jpg`: "Equirectangular Projected Earth", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/3615/ (`earth_noClouds.0330.jpg`). Used on the Earth globe, the Earth plates on the menus and in the Gravity Test Chamber.
+  - `moon.jpg`: "CGI Moon Kit", NASA Scientific Visualization Studio, https://svs.gsfc.nasa.gov/4720/ (`lroc_color_2k.jpg`, from Lunar Reconnaissance Orbiter data). Moon plates on the menus and the Gravity Test Chamber.
+  - `mars.jpg` and `jupiter.jpg`: NASA 3D Resources, https://science.nasa.gov/3d-resources/, fetched from its mirror https://github.com/nasa/NASA-3D-Resources (`Images and Textures/Mars`, `Images and Textures/Jupiter`). Mars plates on the menus (Mars only) and the Gravity Test Chamber.
 - The ground walked on, the clouds and everything else are still drawn in code.
 - **No other third-party models, images or audio files.**
 - **No NASA insignia and no flags.** Beyond Earth is a hackathon project and is not endorsed by NASA.
@@ -51,6 +54,8 @@
 | @react-three/fiber | 9.8.2 | MIT |
 | zustand | 5.1.0 | MIT |
 | @fontsource-variable/exo-2 | 5.3.0 | OFL-1.1 |
+| @fontsource-variable/space-grotesk | 5.3.0 | OFL-1.1 |
+| @fontsource-variable/jetbrains-mono | 5.3.0 | OFL-1.1 |
 | vite | 8.3.8 | MIT |
 | @vitejs/plugin-react | 6.3.0 | MIT |
 | vitest | 5.1.0 | MIT |
